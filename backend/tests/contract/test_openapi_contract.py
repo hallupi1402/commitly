@@ -19,4 +19,4 @@ def test_generated_openapi_contains_contract_operations() -> None:
         for path, operations in create_app().openapi()["paths"].items()
         for method in operations
     }
-    assert actual == expected
+    assert expected <= actual

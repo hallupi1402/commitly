@@ -25,3 +25,14 @@ def test_reflection_is_optional_and_editable(client) -> None:
     assert saved.status_code == 200
     changed = client.put(url, headers={"If-Match": saved.headers["etag"]}, json={"date": day, "entries": [], "reflection": {"accomplishments": "Shipped more", "blockers": None, "next_steps": None}})
     assert changed.json()["reflection"]["accomplishments"] == "Shipped more"
+
+
+def test_today_reports_malformed_prior_journal_with_path(client, workspace) -> None:
+    prior = date.today() - timedelta(days=1)
+    path = workspace / "journals" / f"{prior.isoformat()}.md"
+    path.parent.mkdir(parents=True)
+    path.write_text("malformed", encoding="utf-8")
+    response = client.get("/api/v1/today")
+    assert response.status_code == 422
+    assert str(path) in response.json()["message"]
+    assert path.read_text(encoding="utf-8") == "malformed"

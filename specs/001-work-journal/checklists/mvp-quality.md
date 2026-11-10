@@ -1,68 +1,57 @@
-# MVP Requirements Quality Checklist: Commitly — Work Journal First
+# MVP Requirements Quality Checklist: Commitly Semantic Daily Work Report
 
-**Purpose**: Review the MVP requirements for completeness, clarity, consistency, and readiness before task generation and implementation.
+**Purpose**: Check scope, report shape, data safety, and artifact consistency before
+implementation.
 **Created**: 2026-11-10
 **Feature**: [spec.md](../spec.md)
 
-**Note**: This custom checklist reviews the written requirements and their alignment with the technical plan; it is not an implementation test plan.
-**Review Ownership**: This checklist is a reviewer-owned requirements-quality review artifact. Mark an item `[x]` only when the reviewer determines the requirements-quality criterion is satisfied.
-**Marker Semantics**: `[x]` means the criterion has been reviewed and satisfied for requirements quality. It does not mean implementation work is complete.
+**Review ownership**: Checked items mean the requirements were reviewed; they do
+not mean implementation is complete. User approval is a separate final gate.
 
-## Requirement Completeness
+## Core Outcome and Report Shape
 
-- [x] CHK001 Are the Markdown record format, supported schema versions, and handling of future format changes defined consistently across the spec and design? [Completeness, Spec §FR-010, Data Model §Markdown Schema Version 1]
-- [x] CHK002 Are all optional entry fields represented in the entry model and covered by clear capture requirements? [Completeness, Spec §FR-003, Spec §Key Entities]
-- [x] CHK003 Are project identity, duplicate-name behavior, rename rules, and archive behavior specified consistently? [Completeness, Spec §FR-007, Data Model §Project]
-- [x] CHK004 Does the spec make clear whether Settings only displays the workspace location or lets the user change it? [Clarity, Spec §FR-015, OpenAPI §/settings]
-- [x] CHK005 Are safeguards against automatically pushing journal data to Commitly's public source repository explicit and testable? [Completeness, Spec §FR-014, Spec §Backup Configuration]
+- [x] CHK001 Is the product's main output a prose report about completed work, not
+  a manual-entry journal? [Spec §Product Brief, §US1]
+- [x] CHK002 Are the three report sections explicitly defined as Tóm tắt, Điểm
+  chính, and Chi tiết? [Spec §Baseline Scope, §FR-006]
+- [x] CHK003 Is Log nguồn defined with repository name/path, commit ID/time,
+  changed paths, and line counts where available? [Spec §FR-006]
+- [x] CHK004 Does the specification require explanation of code behavior rather
+  than restating commit messages/statistics? [Spec §FR-004]
+- [x] CHK005 Does the paper/document example distinguish a file change from proof
+  that the user read or understood it? [Spec §US1/AC3, §FR-005]
 
-## Requirement Clarity
+## Grounding, Privacy, and Failure
 
-- [x] CHK006 Are the date range, ordering, or selection rules for “relevant previous context” stated clearly enough to produce consistent dashboard results? [Ambiguity, Spec §FR-001, Spec §User Story 2]
-- [x] CHK007 Is “latest next steps” ordering defined, and is blocker resolution consistently defined for entry and reflection content? [Clarity, Spec §FR-008, Spec §Key Entities, Data Model §Journal Entry]
-- [x] CHK008 Does the spec define what the user must acknowledge when confirming a backup destination as private? [Clarity, Spec §FR-014, Spec §Clarifications]
+- [x] CHK006 Are generated claims linked to commit/path evidence, with uncertainty
+  handled explicitly? [Spec §FR-007]
+- [x] CHK007 Is semantic analysis local-only, with no hosted AI fallback and no
+  source upload? [Spec §FR-011, Plan §Local semantic analysis]
+- [x] CHK008 Are local model/runtime selection and document format support explicit
+  blocking research tasks before implementation? [Plan §Delivery Phases, Tasks
+  Phase 1]
+- [x] CHK009 Are unsupported files, model failures, fetch failures, and partial
+  refreshes specified to preserve factual source logs? [Spec §FR-013–015]
+- [x] CHK010 Are Markdown schema, stable evidence identity, atomic writes, and
+  external-edit conflict behavior consistent across design artifacts? [Spec
+  §FR-009–010, Data Model, API]
 
-## Requirement Consistency
+## Scope and Acceptance
 
-- [x] CHK009 Does the spec's assumption that a missed backup waits until Commitly next runs agree with the plan's timer running while the UI is closed and catching up after user-manager activation? [Conflict, Spec §Assumptions, Plan §Architecture and Flow, Research §Git Backup]
-- [x] CHK010 Are external edits to the project registry covered by the same user-facing conflict and recovery requirements as edits to daily journals? [Consistency, Spec §FR-012, Data Model §Write and Conflict Rules]
-- [x] CHK011 Is the fail-safe behavior for filesystems that cannot perform safe writes specified in the product requirements, including the user-facing error and preservation of the draft? [Gap, Spec §FR-012, Spec §FR-016, Plan §Constraints]
-
-## Acceptance Criteria Quality
-
-- [x] CHK012 Can every functional requirement be traced to at least one acceptance scenario or measurable outcome, especially workspace settings and backup privacy? [Traceability, Spec §FR-014, Spec §FR-015, Spec §User Story 4]
-- [x] CHK013 Is search success measurable against a defined dataset size, result expectation, or response-time target? [Measurability, Spec §SC-005, Plan §Performance Goals]
-- [x] CHK014 Are the conditions for “two actions” in the Quick Capture success criterion explicit about the starting state and what counts as an action? [Clarity, Spec §SC-001, Spec §FR-005]
-
-## Scenario Coverage
-
-- [x] CHK015 Are requirements complete for a second external edit arriving while the user is resolving an existing conflict? [Coverage, Spec §FR-012, Spec §User Story 1]
-- [x] CHK016 Are backup requirements clear for a missed timer run, an unavailable user manager, authentication failure, and a later retry? [Coverage, Spec §FR-013, Spec §FR-014, Spec §SC-007, Plan §Architecture and Flow]
-
-## Edge Case Coverage
-
-- [x] CHK017 Are malformed Markdown and unsupported schema versions covered with a recovery path that preserves the original file? [Exception Flow, Spec §FR-010, Spec §FR-012, Data Model §Write and Conflict Rules]
-- [x] CHK018 Is the expected behavior clear when a project is renamed or archived while older entries still reference it? [Edge Case, Spec §FR-007, Data Model §Project]
-
-## Non-Functional Requirements
-
-- [x] CHK019 Are expected journal volume and local search responsiveness bounded enough to judge whether file scanning remains acceptable? [Gap, Spec §SC-005, Plan §Performance Goals, Plan §Scale/Scope]
-- [x] CHK020 Are accessibility requirements specified beyond keyboard operation and dark-mode readability, including focus visibility and assistive-technology semantics? [Coverage, Spec §FR-016, Spec §SC-006, Constitution Principle IX]
-
-## Dependencies & Assumptions
-
-- [x] CHK021 Are systemd user-session requirements and the effect of leaving linger disabled stated consistently for daily backup expectations? [Assumption, Spec §Assumptions, Research §Git Backup and Scheduling]
-- [x] CHK022 Are backup credentials and remote authentication expectations clear without storing secrets in Commitly settings or service configuration? [Dependency, Spec §FR-014, Research §Git Backup and Scheduling]
-
-## Ambiguities & Conflicts
-
-- [x] CHK023 Does the specification distinguish “private by default” from any technical guarantee that a user-selected remote is actually private? [Ambiguity, Spec §FR-014, Spec §Clarifications]
-- [x] CHK024 Are the conflict requirements clear about when preserved local and external versions may be removed after a successful user resolution? [Clarity, Spec §FR-012, Data Model §Journal Conflict]
+- [x] CHK011 Are structured manual entries, Projects, Reflection, journal backup,
+  and other activity sources deferred while a single-line supplement is retained?
+  [Spec §Baseline Scope, §Out of Scope, §FR-017]
+- [x] CHK012 Do tasks deliver local semantic report generation before history
+  browsing and include known code/document fixtures? [Tasks Phase 3–4]
+- [x] CHK013 Are offline behavior, safe report persistence, keyboard access, and
+  dark mode verifiable? [Spec §SC-005–008]
+- [ ] CHK014 Has the user approved this revised semantic report baseline before
+  application-code changes? [Plan §Pre-Implementation Review Gate]
 
 ## Notes
 
-- Mark items `[x]` only after review confirms the requirement-quality criterion is satisfied.
-- Leave items unchecked when they still require clarification, correction, or reviewer evaluation.
-- `$speckit-implement` reads checklist checkbox state as a gate and must not modify markers.
-- `checklists/requirements.md` is the separate built-in specification-quality checklist maintained by `$speckit-specify` and `$speckit-clarify`.
-- Findings may be recorded inline; items are numbered sequentially for easy reference.
+- CHK001–013 reflect document review only; CHK014 remains unchecked until the user
+  approves the scope and artifact set.
+- Local model feasibility is intentionally not claimed as solved. The research
+  spike must report an actual local option or identify the measured blocker before
+  implementation proceeds.

@@ -126,13 +126,35 @@ class BackupStatus(StrictModel):
 class Settings(StrictModel):
     workspace_path: str
     theme: Literal["system", "light", "dark"]
+    model_path: str | None = None
+    model_executable: str = "llama-cli"
 
 
 class SettingsPatch(StrictModel):
     theme: Literal["system", "light", "dark"] | None = None
+    model_path: str | None = None
+    model_executable: str | None = None
 
 
 class Error(StrictModel):
     code: str
     message: str
     details: dict = Field(default_factory=dict)
+
+
+class RepositoryInput(StrictModel):
+    path: str = Field(min_length=1)
+    remote_name: str | None = None
+    display_name: str | None = None
+
+
+class RefreshInput(StrictModel):
+    start: date = Field(alias="from")
+    end: date = Field(alias="to")
+    repository_ids: list[str] | None = None
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+
+class UserContextInput(StrictModel):
+    text: str | None = Field(default=None, max_length=500)

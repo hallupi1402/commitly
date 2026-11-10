@@ -23,7 +23,7 @@ def test_atomic_create_and_update_keep_previous_data_on_failed_write(workspace: 
 def test_external_change_returns_recoverable_conflict(workspace: Path) -> None:
     _, revision = write_journal(workspace, _doc(), read_journal(workspace, date(2026, 11, 10))[1])
     path = workspace / "journals" / "2026-11-10.md"
-    path.write_text(path.read_text().replace("# Daily Journal", "# Externally edited journal"), encoding="utf-8")
+    path.write_text(path.read_text() + "\n## Reflection\n\n### Accomplishments\nExternal edit\n", encoding="utf-8")
     with pytest.raises(JournalConflictError) as caught:
         write_journal(workspace, {**_doc(), "entries": []}, revision)
     assert (workspace / ".commitly" / "conflicts" / "2026-11-10" / caught.value.conflict_id / "local.md").exists()

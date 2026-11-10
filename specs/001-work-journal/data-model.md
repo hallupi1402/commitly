@@ -1,187 +1,135 @@
-# Data Model: Commitly — Work Journal First
+# Data Model: Commitly Semantic Daily Work Report
 
 ## Storage Boundaries
 
-- The journal workspace is `$XDG_DATA_HOME/commitly/journal`, or
-  `~/.local/share/commitly/journal` when `XDG_DATA_HOME` is unset. Settings are kept
-  under `$XDG_CONFIG_HOME/commitly` and backup run status under
-  `$XDG_STATE_HOME/commitly`, each falling back to the corresponding `~/.config` or
-  `~/.local/state` path.
-- The journal workspace is outside the application source checkout. When Git backup
-  is enabled, this workspace has its own Git metadata; Commitly does not use the
-  source checkout's repository or remote.
-- Journal and project records are Markdown. Settings and operational backup status
-  are JSON and are not journal source data. No database or search index is used.
+- One `reports/YYYY-MM-DD.md` file per local report date, under the user's XDG data
+  workspace and outside the public source checkout.
+- Markdown is the source of truth. No database, cloud store, or search index.
+- Selected repository configuration and refresh status are local application
+  configuration; they contain no credentials.
+- Analysis inputs/outputs remain local. Do not persist full patches or extracted
+  full paper contents in report files; persist only explanations and provenance.
 
-## Markdown Schema Version 1
-
-Version 1 is the only supported version for both daily journals and `projects.md`.
-Unknown future versions are unsupported: preserve the original, show an actionable
-error, and require the user to copy and manually migrate the file. Never rewrite it
-automatically.
-
-The parser accepts UTF-8 Markdown with a journal header, delimited entry blocks,
-optional reflection sections, and a trailing schema version. Metadata comments use
-JSON so the parser can use Python's standard library; user content remains ordinary
-Markdown.
+## Report Markdown Schema v1
 
 ```markdown
-<!-- commitly:journal v1 date=2026-11-10 -->
-# Daily Journal — 2026-11-10
+<!-- commitly:report v1 date=2026-11-10 -->
+# Báo cáo công việc — 10/11/2026
 
-<!-- commitly:entry {"id":"<uuid>","created_at":"<RFC3339 timestamp>","type":"work","project_id":null,"blocker_resolved_at":null} -->
-### Description
-Fixed the parser error on startup.
+## Tóm tắt
+Hoàn thiện luồng xử lý xung đột khi file nhật ký bị sửa bên ngoài, đồng thời bổ
+sung kiểm thử hồi quy cho API và giao diện. [evidence: <uuid>]
 
-### Tags
-- parser
+## Điểm chính
+- Thêm bước so sánh và khôi phục khi file Markdown có chỉnh sửa bên ngoài.
+  [evidence: <uuid>]
+- Thêm `docs/example-paper.pdf`; nội dung trình bày về ... [evidence: <uuid>]
+- Người dùng ghi: “Đọc paper X và ghi lại các ý chính.” [user-reported: <uuid>]
 
-### Result
-The journal now opens with the saved entries.
+## Chi tiết
+### Commitly
+Luồng giải quyết xung đột giữ lại cả hai phiên bản và kiểm tra file lần nữa trước
+khi lưu. Kiểm thử API và giao diện bao phủ đường đi này.
 
-### Next step
-Add a regression case for an empty journal.
-
-### References
-- https://example.invalid/issue/123
-
-### Notes
-Additional Markdown notes.
-<!-- /commitly:entry <uuid> -->
-
-## Reflection
-### Accomplishments
-...
-### Blockers
-...
-### Next steps
-...
+## Log nguồn
+<!-- commitly:evidence {"id":"<uuid>","repo_id":"<stable-id>","commit_id":"<full-object-id>","authored_at":"<RFC3339 timestamp>"} -->
+- Repo: commitly (`/home/user/src/commitly`)
+- Commit: `abc123...` — Add conflict recovery · 14:32
+- Thay đổi: `backend/store.py` (+12 / -3), `backend/tests/test_store.py` (+18 / -0)
+<!-- /commitly:evidence <uuid> -->
+<!-- commitly:context {"id":"<uuid>","created_at":"<RFC3339 timestamp>"} -->
+- Ngữ cảnh do người dùng ghi: Đọc paper X và ghi lại các ý chính.
+<!-- /commitly:context <uuid> -->
 ```
 
-Rules:
-
-- The filename is `journals/YYYY-MM-DD.md`; its date must match the header and every
-  entry's assigned local calendar date. A date-specific entry cannot be moved by
-  editing its timestamp.
-- Each entry start comment contains a stable UUID, immutable RFC 3339 UTC creation
-  timestamp, lowercase type (`work`, `note`, or `blocker`), and optional project UUID.
-  The Markdown body contains the required description and optional tags, result,
-  blocker, next step, references, and detailed notes. A blocker resolution timestamp
-  is stored in the JSON metadata when present.
-- Entry blocks are ordered by creation timestamp, then UUID for a stable tie-break.
-  Missing, duplicate, malformed, or unsupported metadata is a read error; the
-  application does not silently rewrite the file or generate replacement IDs.
-  The error identifies the file and asks the user to copy and repair it manually;
-  no save is allowed until it parses successfully.
-- Reflection is optional and belongs to one local journal date. Its three fields are
-  independently optional Markdown sections.
-- An archived project's name and ID remain available to render existing entries.
-  New entries cannot select archived projects. Renames preserve the project ID, so
-  older entries display the current name; archived projects also display an archived
-  label. Active names are unique case-insensitively.
-- Prior context scans all dates and includes entries with a next step and unresolved
-  entry blockers, newest first by local date, creation timestamp, then ID. The Today
-  dashboard shows at most five of each kind across all dates; there is no date cutoff.
-  Project activity uses the same ordering and limit. A blocker is an entry of type
-  `blocker` or with non-empty `blocker` content, unresolved until
-  `blocker_resolved_at` is set. Reflection blocker text is descriptive only, has no
-  separate resolved state, and does not count in blocker summaries.
+Report sections are always ordered Tóm tắt, Điểm chính, Chi tiết, Log nguồn. If
+analysis is partially unavailable, its state appears in the relevant detail while
+source logs remain complete.
 
 ## Entities
 
-### Journal Entry
+### Report
 
 | Field | Type | Rule |
 |---|---|---|
-| `id` | UUID | Generated once by the client at first save; unique across the workspace; never changes on edit |
-| `created_at` | RFC 3339 timestamp | Generated automatically in UTC at first save; preserved on edit |
-| `date` | Local calendar date | Determined at creation; used to select the daily file |
-| `type` | `work` / `note` / `blocker` | Defaults to `work` |
-| `description` | Markdown text | Required after whitespace trimming |
-| `project_id` | UUID or null | Optional; must reference a project, including archived historical projects |
-| `tags` | List of strings | Optional; normalized for duplicate comparison |
-| `result` | Markdown text or null | Optional |
-| `blocker` | Markdown text or null | Optional |
-| `blocker_resolved_at` | RFC 3339 timestamp or null | Null means unresolved; resolution preserves the entry |
-| `next_step` | Markdown text or null | Optional |
-| `references` | List of strings | Optional user-provided URLs or labels |
-| `notes` | Markdown text or null | Optional detailed notes |
+| `date` | Local date | Selects `reports/YYYY-MM-DD.md` |
+| `summary` | Report Claim | Short Vietnamese overview linked to one or more evidence IDs |
+| `highlights` | List of Report Claim | Concise accomplishment bullets, each linked to evidence |
+| `details` | List of Report Detail | Explanation grouped by repository and work item |
+| `evidence` | List of Evidence Log | Supporting commits, paths, and Git change facts |
+| `user_context` | List of User Context | Optional one-line developer-provided additions |
+| `analysis_status` | `complete` / `partial` / `unavailable` | Never imply complete when a changed item failed analysis |
+| `schema_version` | Integer | Version 1 only until an explicit migration exists |
 
-### Daily Journal
-
-One `journals/YYYY-MM-DD.md` file, containing the entries for that local date and
-one optional reflection. The file's exact bytes have a SHA-256 revision used for
-optimistic concurrency checks and ETags.
-
-### Daily Reflection
+### Report Claim / Detail
 
 | Field | Type | Rule |
 |---|---|---|
-| `date` | Local calendar date | One reflection per date |
-| `accomplishments` | Markdown text or null | Optional |
-| `blockers` | Markdown text or null | Optional |
-| `next_steps` | Markdown text or null | Optional |
+| `id` | UUID | Stable across report rewrites for the same evidence item |
+| `text` | Vietnamese Markdown text | Must be supported by one or more evidence IDs |
+| `evidence_ids` | List of UUID | References evidence in this report |
+| `certainty` | `supported` / `uncertain` | Uncertain claims are explicitly labelled or omitted |
 
-### Project
-
-Projects are stored in `projects.md` as Markdown blocks with JSON metadata:
-
-```markdown
-<!-- commitly:projects v1 -->
-# Projects
-
-<!-- commitly:project {"id":"<uuid>","created_at":"<RFC3339 timestamp>","archived_at":null} -->
-## Commitly
-<!-- /commitly:project <uuid> -->
-```
+### Evidence Log
 
 | Field | Type | Rule |
 |---|---|---|
-| `id` | UUID | Generated once by the client and stable |
-| `name` | String | Required after whitespace trimming; unique among active projects, case-insensitive |
-| `created_at` | RFC 3339 timestamp | Generated in UTC and immutable |
-| `archived_at` | RFC 3339 timestamp or null | Null means active; archiving preserves history |
+| `id` | UUID | Stable report evidence identity |
+| `repository_id` | String | Canonical local Git common-directory identity |
+| `repository_name` | String | User-visible repository label |
+| `repository_path` | String | Local path shown only in local report |
+| `commit_id` | String | Full Git object ID; unique with repository ID |
+| `subject` | String | Original commit subject, displayed verbatim as text |
+| `authored_at` | RFC 3339 | Original Git author timestamp and offset |
+| `changed_paths` | List of strings | Safe, exact local paths relative to repository root |
+| `added_lines` / `deleted_lines` | Integer or null | Null for binary/unknown changes |
+| `analysis_status` | `complete` / `partial` / `unsupported` / `failed` | Per-commit analysis outcome |
+| `analysis_note` | String or null | Sanitized explanation when analysis was unavailable |
 
-### Journal Conflict
+### User Context
 
-A conflict contains the expected revision, current external Markdown, submitted
-local draft, and a generated conflict ID. Before returning `409`, the backend saves
-both versions as Markdown under `.commitly/conflicts/YYYY-MM-DD/<conflict-id>/`.
-The client may compare, choose, or combine content; the backend writes the chosen
-resolution only when the current external revision still matches. A newer external
-edit creates another conflict and preserves the new external file and submitted
-draft. Recovery copies remain until the resolution saves successfully and may be
-deleted afterward. The project registry uses the same compare-and-resolve behavior, with both
-versions stored as Markdown under `.commitly/conflicts/projects/<conflict-id>/` before
-the conflict is shown; its recovery copies may also be deleted only after a
-successful resolution save.
+| Field | Type | Rule |
+|---|---|---|
+| `id` | UUID | Stable identity for one user-provided line |
+| `created_at` | RFC 3339 | Creation time, preserved on edit |
+| `text` | String | Required after trimming; one line only |
 
-### Backup Configuration and Status
+### Selected Repository
 
-Configuration is stored separately from journal Markdown and contains the optional
-remote URL, explicit private-destination confirmation, and configured branch/ref.
-It contains no Git credentials. Status records last attempt, last
-successful push, pending local commits, and a sanitized last error. The systemd
-service and API read/write the same status file using atomic replacement.
+| Field | Type | Rule |
+|---|---|---|
+| `id` | String | Stable identity derived from canonical Git common directory |
+| `path` | String | Explicitly selected local path |
+| `display_name` | String | Local label; does not affect identity |
+| `remote_name` | String | Selected remote; defaults to `origin` when available |
+| `author_email` | String | Repository-local `user.email` used for author filtering |
+| `last_fetch_at` | RFC 3339 or null | Last successful remote check |
+| `last_fetch_status` | `success` / `failed` / `never` | Last remote verification state |
 
-## Write and Conflict Rules
+## Evidence and Language Rules
 
-1. Reads return the journal revision as a quoted SHA-256 `ETag`.
-2. Every mutation sends `If-Match` for the revision the user edited. A stale revision
-   triggers `409 Conflict`; the submitted draft and current file are saved before
-   the conflict is shown.
-3. Commitly serializes its own writers with a per-file advisory lock and writes a
-   uniquely named, synced temporary file beside the target. For an existing file,
-   it uses Linux `renameat2(RENAME_EXCHANGE)` to atomically exchange the temporary
-   file and target, then hashes the displaced file. If that hash differs from the
-   expected revision, it exchanges back, saves both copies, and returns a conflict.
-   For a missing file, it uses `RENAME_NOREPLACE` so an externally created file is
-   never silently replaced. It syncs the containing directory after a successful
-   write.
-4. The app does not overwrite malformed or unsupported Markdown. It leaves the file
-   untouched and returns an actionable recovery error.
-5. Project registry edits use the same revision and conflict protections as daily
-   journal edits.
-6. If the Linux filesystem does not support the required atomic exchange/create
-   operation, the app preserves the candidate as a recovery file and reports an
-   actionable error. It does not fall back to an unguarded replacement.
+- Include a Git report item only for commits reachable from the selected remote's
+  latest available remote-tracking refs and authored by the configured identity.
+- Deduplicate on repository identity plus full object ID.
+- Group by local date derived from the Git author timestamp; preserve its original
+  timestamp and zone.
+- Every Git-derived prose claim stores one or more evidence IDs. Those IDs resolve
+  to commit IDs and changed paths in the Log nguồn section. User context is
+  separately attributed as user-reported and is not passed off as Git evidence.
+- Analyze only changed code/documents and bounded context needed to explain them.
+  Never scan unrelated repository files or execute repository code.
+- Paper/document file changes are described as file changes. A commit does not
+  prove the developer read or understood the document.
+- Do not persist full source patches, full extracted paper text, model prompts,
+  credential-bearing URLs, or credentials.
+
+## Persistence and Conflicts
+
+- Parse UTF-8 Markdown with supported v1 metadata. Malformed/unsupported files
+  remain untouched and produce an actionable error.
+- Keep a revision hash for each report. Mutations use the existing safe atomic
+  write/external conflict mechanism. A conflict preserves both the external file
+  and local generated draft until an explicit resolution succeeds.
+- A failed fetch, extraction, or analysis cannot remove evidence already saved.
+- A failed report write leaves the old report intact and preserves the candidate
+  for recovery.

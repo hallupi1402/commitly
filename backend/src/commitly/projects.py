@@ -159,7 +159,11 @@ def activity(workspace: Path, project_id: str) -> dict:
         raise KeyError(project_id)
     entries = []
     for path in sorted((workspace / "journals").glob("*.md")) if (workspace / "journals").exists() else []:
-        journal = parse_journal(path.read_text(encoding="utf-8"), path.stem, path)
+        try:
+            raw = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            raise JournalFormatError(f"Cannot read journal file: {exc}", path) from exc
+        journal = parse_journal(raw, path.stem, path)
         entries.extend({"date": journal["date"], "entry": entry} for entry in journal["entries"] if entry["project_id"] == project_id)
     entries.sort(key=lambda item: entry_sort_key(item["entry"]), reverse=True)
     return {

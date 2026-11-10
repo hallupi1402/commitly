@@ -1,154 +1,107 @@
-# Research: Commitly — Work Journal First
+# Research Plan: Local Semantic Report Generation
 
-**Date**: 2026-11-10
-**Status**: Decisions resolved for Phase 1 design
+## User requirement
 
-## Decisions
+The report must explain code behavior changes and summarize relevant paper or
+document content in natural Vietnamese prose. It must include a short summary,
+accomplishment bullets, details, and a Git source log. A commit subject plus
+changed paths and line counts alone does not satisfy this outcome.
 
-### Local web application boundary
+## Evidence sources
 
-- **Decision**: Build the frontend with Vite, React, TypeScript, and Tailwind CSS.
-  In development, Vite proxies `/api` to FastAPI. In normal use, one FastAPI process
-  bound to loopback serves both the built frontend and `/api/v1` on the same origin.
-- **Rationale**: This keeps browser data local, avoids a separate production web
-  server and cross-origin configuration, and does not require network access after
-  dependencies have been installed. Vite produces static production assets, and
-  FastAPI documents serving those assets with SPA route fallback.
-- **Alternatives considered**: Keep Vite running in production, or run separate
-  frontend and API servers. Both add a long-running process and more origin/port
-  configuration without adding MVP value.
-- **Security constraint**: Bind the backend and Vite development server to
-  `127.0.0.1`; do not enable wildcard CORS or LAN binding. Validate Host and Origin
-  for write requests. No user authentication is added for this single-user local
-  application.
-- **Sources**: [FastAPI frontend serving](https://fastapi.tiangolo.com/tutorial/frontend/),
-  [FastAPI OpenAPI generation](https://fastapi.tiangolo.com/tutorial/first-steps/),
-  [Vite server options](https://vite.dev/config/server-options),
-  [Vite guide](https://vite.dev/guide/),
-  [Tailwind CSS Vite integration](https://tailwindcss.com/docs/installation/using-vite).
+- Selected Git commits: full object ID, author/time, subject, reachable remote refs.
+- Code: commit diff hunks, changed source files, and bounded neighboring context
+  only when needed to explain a change.
+- Paper/documents: locally extracted text from supported changed files. A file
+  being added/changed is evidence of a repository change, not proof the developer
+  read or understood it.
+- Source log: repository identity/name/path, commit, exact changed paths, and
+  numstat when meaningful.
 
-### Python and JavaScript toolchains
+Do not scan unrelated files, execute repository code, persist full patches, or send
+code/document contents to a hosted service.
 
-- **Decision**: Use `uv` for the Python project and lockfile, Uvicorn as the single
-  local ASGI process runner, and npm with a
-  committed lockfile for the Vite frontend. Target Python 3.12 or newer and Node.js
-  22.12 or newer. Use current compatible FastAPI/Pydantic releases and Tailwind CSS
-  v4; lock exact dependency versions when implementation begins.
-- **Rationale**: `uv` manages project dependencies and a reproducible lockfile.
-  Vite documents Node.js 22.12+ as a supported line. npm is the smallest default
-  because no JavaScript package manager was specified.
-- **Alternatives considered**: Adding a workspace manager or additional package
-  manager would increase setup without improving the two-project MVP.
-- **Sources**: [uv project guide](https://docs.astral.sh/uv/guides/projects/),
-  [Vite compatibility](https://vite.dev/guide/),
-  [Tailwind CSS Vite integration](https://tailwindcss.com/docs/installation/using-vite).
+## Local model/runtime decision — blocking before implementation
 
-### Markdown schema and persistence
+No model, runtime, or extraction library has been selected yet. T005–T007 in
+`tasks.md` must compare viable local approaches on disposable fixtures before any
+integration code begins. The comparison must measure:
 
-- **Decision**: Store one `journals/YYYY-MM-DD.md` file per local calendar date and
-  a `projects.md` registry in the user's separate journal workspace. Use documented
-  Markdown headings and delimited HTML comments containing JSON metadata for stable
-  IDs, timestamps, type, project IDs, and schema version. User-authored descriptions,
-  details, references, and reflections remain ordinary Markdown sections. Parse the
-  comment metadata with Python's standard `json` module; do not add a database or a
-  Markdown/YAML parsing dependency.
-- **Rationale**: This keeps the source of truth human-readable and directly editable,
-  while preserving stable machine fields without duplicating entry text. A version
-  field allows the parser to reject unsupported formats with a clear recovery error.
-- **Alternatives considered**: YAML front matter would add a parser dependency and
-  put more of the journal's content into metadata; a database would create a second
-  source of truth; raw Markdown headings without IDs cannot safely identify entries
-  across edits.
+- Correctness and evidence grounding for code changes and paper text.
+- Unsupported-claim rate, including whether it invents developer intent.
+- Vietnamese output quality and preservation of source names/identifiers.
+- Peak memory, model/package size, latency, CPU/GPU expectations, and installation
+  complexity on the target Linux desktop.
+- Offline execution after installation and license/redistribution limits.
+- Safe limits for diff context, document size, and malformed/untrusted input.
 
-### Atomic writes and external edits
+If no local option meets the privacy/offline constraints and acceptable quality,
+stop and return with the measured trade-off. Do not silently fall back to remote AI.
 
-- **Decision**: Serialize Commitly writers with a per-file advisory lock, write the
-  full candidate to a same-directory temporary file, flush and `fsync` it, then use
-  Linux `renameat2(RENAME_EXCHANGE)` to atomically exchange it with the existing
-  journal. Hash the displaced file now held at the temporary path and compare that
-  exact revision to the client's `If-Match`. If it differs, exchange the files back,
-  save the local and external versions as Markdown conflict copies, and return a
-  conflict without committing either version. For a new file, use
-  `RENAME_NOREPLACE`. After a successful exchange, `fsync` the containing directory.
-- **Rationale**: A check followed by ordinary replacement has a race: an external
-  editor can save between them. Exchanging first lets Commitly inspect the exact file
-  displaced by the atomic operation, including an edit by a process that ignores
-  Commitly's lock. Same-directory temporary files keep the operation on one
-  filesystem. The user-selected merged/kept resolution is written only after another
-  revision check and exchange.
-- **Alternatives considered**: In-place writes can truncate files on failure.
-  Advisory locking plus a pre-write hash has a compare/replace race because Markdown
-  editors do not take Commitly's lock. A database or immutable revision store would
-  add a second source of truth and more complexity.
-- **Fail-safe behavior**: `renameat2` exchange is available on supported Linux
-  kernels/filesystems. If the call or filesystem flag is unsupported, Commitly keeps
-  the candidate as a recovery Markdown file, reports that the workspace cannot be
-  written safely, and does not fall back to an unguarded replacement.
-- **Sources**: [Python `os`](https://docs.python.org/3/library/os.html),
-  [Python `tempfile`](https://docs.python.org/3/library/tempfile.html),
-  [Linux `renameat2(2)`](https://man7.org/linux/man-pages/man2/rename.2.html),
-  [Linux `fsync(2)`](https://man7.org/linux/man-pages/man2/fsync.2.html),
-  [Linux `flock(2)`](https://man7.org/linux/man-pages/man2/flock.2.html).
+## Document extraction
 
-### Git backup and scheduling
+Begin with paper/document formats explicitly observed in the disposable fixture.
+Prefer a platform tool or already installed dependency if it safely extracts text.
+Bound file size and extracted text. For encrypted, malformed, oversized, scanned,
+or unsupported documents, preserve the Git evidence and mark analysis unavailable;
+do not add OCR to the baseline without separate scope approval.
 
-- **Decision**: Keep the journal workspace outside the Commitly source checkout and
-  initialize a separate Git repository there when backup is enabled. A systemd user
-  timer activates a short-lived backup service daily with `OnCalendar=daily` and
-  `Persistent=true`. The job detects changes using stable porcelain status output,
-  commits locally only when files changed, then pushes an explicit branch/ref only
-  to the configured remote after the user confirms that destination is private.
-- **Rationale**: The separate repository prevents journal commits from entering the
-  public source repository. A one-shot timer meets daily scheduling without a
-  resident process. Local commits survive remote, authentication, or network errors
-  and can be pushed on a later run. No force push, reset, automatic remote merge, or
-  empty commit is used.
-- **Scheduling assumption**: The persistent timer runs while the user's systemd
-  manager is active even when the UI is closed. If the manager is stopped, a missed
-  run is caught up when the user logs in again. Scheduling requires an active user
-  manager; do not enable linger by default. Remote or credential failures retain
-  local commits, report a sanitized error, and retry on the next scheduled run. The
-  service runs the installed backup entry point and reads the same workspace
-  configuration as the UI.
-- **Credentials**: Reuse the user's configured Git credential helper; do not put
-  tokens or passwords in systemd unit environment variables or Commitly settings.
-  Report authentication failures without logging credentials.
-- **Alternatives considered**: A resident application daemon is unnecessary.
-  Pushing every keystroke would expose unfinished work and create excessive commits.
-  Automatic pull/merge could rewrite or conflict with personal journals.
-- **Sources**: [systemd timer units](https://www.freedesktop.org/software/systemd/man/latest/systemd.timer.html),
-  [systemd execution environment](https://www.freedesktop.org/software/systemd/man/latest/systemd.exec.html),
-  [Git status](https://git-scm.com/docs/git-status),
-  [Git commit](https://git-scm.com/docs/git-commit),
-  [Git push](https://git-scm.com/docs/git-push).
+## Report-grounding rules
 
-### API and verification
+- Each summary claim resolves to one or more evidence IDs, which resolve to commit
+  IDs and changed paths.
+- Describe code behavior from the diff and changed files. Distinguish implementation
+  from tests, refactors, documentation, and metadata changes when evidence allows.
+- Phrase document activity as “added/updated document X; its content covers Y.”
+  Do not infer “read paper” from a file addition alone.
+- Omit or label uncertain interpretations. If analysis fails for one commit/file,
+  retain the source log and continue with other evidence.
+- Never include detected secret values or credential-bearing URLs in generated
+  prose or logs.
 
-- **Decision**: Define `/api/v1` operations in `contracts/openapi.yaml`; model
-  requests and responses with FastAPI/Pydantic and keep generated OpenAPI aligned
-  with the checked-in contract. Use pytest and FastAPI's test client for persistence,
-  API, search, conflict, and Git failure tests. Use Vitest and React Testing Library
-  for frontend interaction and keyboard/dark-mode requirements. Render user Markdown
-  with `react-markdown` using its safe defaults and without enabling raw HTML.
-- **Rationale**: A checked-in contract makes the local API reviewable before code
-  exists. The chosen test tools cover the requested behavior without an additional
-  browser automation service.
-- **Alternatives considered**: Duplicating generated client code would add a build
-  step and drift risk; a full end-to-end browser stack is not needed for the first
-  increment, though it can be added if component and API tests miss integration bugs.
-- **Sources**: [FastAPI OpenAPI generation](https://fastapi.tiangolo.com/tutorial/first-steps/),
-  [react-markdown safety and rendering](https://github.com/remarkjs/react-markdown).
+## Git behavior
 
-## Resolved Planning Assumptions
+- `git fetch` updates selected remote-tracking refs but does not push or merge.
+- `git log` provides commit identity, subject, author, and dates; queried commits
+  must be reachable from the selected remote's available refs.
+- Git diff name/status and numstat output provide changed paths and text line
+  counts. Binary changes may not have meaningful line counts.
+- Fetch failures are isolated per repository; saved evidence for the failed source
+  is retained and status is marked unverified.
 
-- npm is the frontend package manager because none was specified.
-- The app is Linux-only for the MVP because the requested scheduled backup uses a
-  systemd user timer.
-- The journal is single-user and local; no numeric concurrency or service-availability
-  target is required.
-- Search scans dated Markdown journals directly. No index or database is added
-  unless measured personal journal sizes show that file scanning is insufficient.
-  Acceptance uses 1,000 seeded entries and checks that every expected match and its
-  source date are returned; no response-time promise is set.
-- Missed daily backups are handled by the persistent user timer; the GUI does not
-  need to remain open, but the user systemd manager must be active for a run.
+## References
+
+- [Git `fetch`](https://git-scm.com/docs/git-fetch) — fetch remote refs without
+  pushing or merging.
+- [Git `log`](https://git-scm.com/docs/git-log) — select commits and inspect
+  author/time metadata.
+- [Git `diff`](https://git-scm.com/docs/git-diff) — inspect changed content and
+  statistics.
+- [Git `diff-tree`](https://git-scm.com/docs/git-diff-tree) — inspect changes for
+  individual commits.
+
+## Remaining research outcomes
+
+### Implementation-time environment check (2026-11-10)
+
+- This host has no `llama-cli`, `llama-server`, or Ollama executable and no local
+  model file. Registry access is unavailable, so a runtime/model could not be
+  installed or evaluated here. Vietnamese quality, factual grounding, latency,
+  memory use, model size, and license remain **unverified**. The product is not
+  release-ready until the disposable-fixture model study is completed.
+- The implementation provides a configurable `llama-cli` adapter. It invokes the
+  CLI only for an explicit refresh and sends no content to a network service. The
+  UI can save a model path and executable. Without those installed locally, it
+  records Git evidence and clearly marks semantic analysis unavailable.
+- Changed `.md`, `.markdown`, `.txt`, and `.rst` files are decoded as UTF-8. Changed
+  `.pdf` files are extracted through `pdftotext` when installed. Extraction is
+  limited to 2 MB per file, 20,000 characters per document, three documents per
+  commit, and a 50,000-character model prompt. Malformed, encrypted, scanned,
+  oversized, empty, or unsupported documents remain in the source log and receive
+  an unavailable explanation. OCR is not included.
+- Disposable Git tests validate selected-remote reachability, author filtering,
+  local-only commit exclusion, cached refs after fetch failure, binary changes,
+  changed paths, numstat, repeated refresh, and Markdown extraction. They do not
+  validate real local-model prose quality or merge/rename/unusual filename cases.
+
+No performance or analysis-quality claim is made from this environment check.

@@ -21,10 +21,11 @@ export function QuickCapture({ date, projects, initial, onSave, onCancel }: Prop
   const [details, setDetails] = useState(Boolean(initial && (initial.tags.length || initial.result || initial.blocker || initial.next_step || initial.references.length || initial.notes || initial.project_id)));
   const [tagInput, setTagInput] = useState(initial?.tags.join(", ") ?? "");
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => { setEntry(initial ? { ...initial } : blank(date)); setTagInput(initial?.tags.join(", ") ?? ""); setDetails(Boolean(initial)); setError(""); }, [date, initial]);
-  const change = <K extends keyof Entry>(key: K, value: Entry[K]) => setEntry((valueBefore) => ({ ...valueBefore, [key]: value }));
+  const change = <K extends keyof Entry>(key: K, value: Entry[K]) => { setSaved(""); setEntry((valueBefore) => ({ ...valueBefore, [key]: value })); };
 
   async function submit(event?: FormEvent) {
     event?.preventDefault();
@@ -32,6 +33,7 @@ export function QuickCapture({ date, projects, initial, onSave, onCancel }: Prop
     setSaving(true); setError("");
     try {
       await onSave({ ...entry, description: entry.description.trim(), tags: entry.tags.map((tag) => tag.trim()).filter(Boolean), references: entry.references.map((ref) => ref.trim()).filter(Boolean) });
+      setSaved(initial ? "Entry updated" : "Entry saved");
       if (!initial) setEntry(blank(date));
     } catch (reason) { setError(reason instanceof Error ? reason.message : "The entry could not be saved."); }
     finally { setSaving(false); }
@@ -57,6 +59,6 @@ export function QuickCapture({ date, projects, initial, onSave, onCancel }: Prop
     </div>}
     {error && <p className="form-error" role="alert">{error}</p>}
     <div className="capture-actions"><button type="button" className="quiet-button" onClick={() => setDetails((v) => !v)}>{details ? "Hide details" : "＋ Add details"}</button><div className="button-row">{onCancel && <button type="button" className="quiet-button" onClick={onCancel}>Cancel</button>}<button className="primary-button" disabled={saving}>{saving ? "Saving…" : initial ? "Save changes" : "Save entry"}<span aria-hidden="true"> ↗</span></button></div></div>
-    <p className="sr-only" aria-live="polite">{saving ? "Saving entry" : ""}</p>
+    <p className="sr-only" role="status" aria-live="polite">{saving ? "Saving entry" : saved}</p>
   </form>;
 }

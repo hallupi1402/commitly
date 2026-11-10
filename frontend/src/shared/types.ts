@@ -85,4 +85,6 @@ export interface BackupStatus {
 export interface Settings {
   workspace_path: string;
   theme: Theme;
+  model_path: string | null;
+  model_executable: string;
 }

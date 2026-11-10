@@ -1,352 +1,120 @@
 openapi: 3.1.0
 info:
-  title: Commitly Local API
-  version: 1.0.0
-  description: Same-origin API for the local Commitly work journal.
+  title: Commitly Local Semantic Report API
+  version: 0.2.0
+  description: Loopback-only API for local semantic analysis of selected Git activity.
 servers:
   - url: /api/v1
-    description: Served by the loopback-only Commitly application.
 tags:
-  - name: Journal
-  - name: Projects
-  - name: Backup
-  - name: Settings
+  - name: Repositories
+  - name: Reports
 paths:
-  /today:
+  /repositories:
     get:
-      tags: [Journal]
-      summary: Read today's journal and dated prior context
+      tags: [Repositories]
+      summary: List explicitly selected repositories and remote-check status
       responses:
         '200':
-          description: Current local date, today's journal, and up to five newest prior next steps and unresolved entry blockers across all dates.
+          description: Selected repositories.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TodayResponse'
-  /journals/{date}:
-    parameters:
-      - $ref: '#/components/parameters/Date'
-    get:
-      tags: [Journal]
-      summary: Read a daily journal
-      description: Returns an empty journal and revision when no file exists yet.
-      responses:
-        '200':
-          description: Journal and current revision.
-          headers:
-            ETag:
-              $ref: '#/components/headers/ETag'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DailyJournal'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-    put:
-      tags: [Journal]
-      summary: Save a complete daily journal snapshot
-      description: |
-        The client sends the complete working copy, including entries and optional
-        reflection. The client generates IDs and UTC creation timestamps
-        automatically for new entries. Existing IDs and creation timestamps are
-        immutable. If-Match
-        must contain the revision from the last read. A stale revision returns both
-        the client working copy and current external version as a preserved conflict.
-      parameters:
-        - $ref: '#/components/parameters/IfMatch'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/DailyJournal'
-      responses:
-        '200':
-          description: Saved journal and new revision.
-          headers:
-            ETag:
-              $ref: '#/components/headers/ETag'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DailyJournal'
-        '409':
-          $ref: '#/components/responses/JournalConflict'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-  /journals/{date}/conflicts/{conflict_id}:
-    parameters:
-      - $ref: '#/components/parameters/Date'
-      - name: conflict_id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-    get:
-      tags: [Journal]
-      summary: Read both preserved versions of a journal conflict
-      responses:
-        '200':
-          description: External journal and client working copy.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/JournalConflict'
-        '404':
-          $ref: '#/components/responses/NotFound'
-  /journals/{date}/conflicts/{conflict_id}/resolve:
-    parameters:
-      - $ref: '#/components/parameters/Date'
-      - name: conflict_id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
+                type: array
+                items:
+                  $ref: '#/components/schemas/Repository'
     post:
-      tags: [Journal]
-      summary: Save the user's selected or combined conflict resolution
-      description: Requires the revision of the current external journal. A newer external edit creates another conflict and preserves both the new external version and submitted draft.
-      parameters:
-        - $ref: '#/components/parameters/IfMatch'
+      tags: [Repositories]
+      summary: Register a user-selected local repository
+      description: Validates a local Git worktree and configured remote. Does not scan any other path.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/DailyJournal'
+              $ref: '#/components/schemas/RepositoryInput'
       responses:
-        '200':
-          description: Resolved journal and new revision.
-          headers:
-            ETag:
-              $ref: '#/components/headers/ETag'
+        '201':
+          description: Repository registered.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DailyJournal'
-        '404':
-          $ref: '#/components/responses/NotFound'
+                $ref: '#/components/schemas/Repository'
+        '400':
+          $ref: '#/components/responses/Problem'
         '409':
-          $ref: '#/components/responses/JournalConflict'
+          $ref: '#/components/responses/Problem'
         '422':
-          $ref: '#/components/responses/ValidationError'
-  /entries/search:
-    get:
-      tags: [Journal]
-      summary: Search and filter entries
-      parameters:
-        - name: q
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: project_id
-          in: query
-          required: false
-          schema:
-            type: string
-            format: uuid
-        - name: type
-          in: query
-          required: false
-          schema:
-            $ref: '#/components/schemas/EntryType'
-        - name: from
-          in: query
-          required: false
-          schema:
-            type: string
-            format: date
-        - name: to
-          in: query
-          required: false
-          schema:
-            type: string
-            format: date
-      responses:
-        '200':
-          description: Matching entries with their journal dates.
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/SearchResult'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-  /projects:
-    get:
-      tags: [Projects]
-      summary: Read active and archived projects
-      description: Returns an empty list and revision when the registry has not been created.
-      responses:
-        '200':
-          description: Complete project registry and revision.
-          headers:
-            ETag:
-              $ref: '#/components/headers/ETag'
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Project'
-    put:
-      tags: [Projects]
-      summary: Save the complete project registry
-      description: The client sends a full working copy with IDs and creation timestamps automatically assigned to new projects; archived projects remain in the registry.
-      parameters:
-        - $ref: '#/components/parameters/IfMatch'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: array
-              items:
-                $ref: '#/components/schemas/Project'
-      responses:
-        '200':
-          description: Saved project registry and new revision.
-          headers:
-            ETag:
-              $ref: '#/components/headers/ETag'
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Project'
-        '409':
-          $ref: '#/components/responses/DocumentConflict'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-  /projects/conflicts/{conflict_id}:
+          $ref: '#/components/responses/Problem'
+  /repositories/{repository_id}:
     parameters:
-      - name: conflict_id
+      - name: repository_id
         in: path
         required: true
         schema:
           type: string
-          format: uuid
-    get:
-      tags: [Projects]
-      summary: Read both preserved versions of a project registry conflict
+    delete:
+      tags: [Repositories]
+      summary: Remove a selected repository source
+      description: Previously generated report evidence remains available.
       responses:
-        '200':
-          description: Local project draft and current external registry.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DocumentConflict'
+        '204':
+          description: Repository registration removed.
         '404':
           $ref: '#/components/responses/NotFound'
-  /projects/conflicts/{conflict_id}/resolve:
-    parameters:
-      - name: conflict_id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
+  /activity/refresh:
     post:
-      tags: [Projects]
-      summary: Save the user's selected or combined project registry resolution
-      description: Requires the current external registry revision. A newer external edit creates another conflict.
-      parameters:
-        - $ref: '#/components/parameters/IfMatch'
+      tags: [Reports]
+      summary: Refresh selected repositories and generate daily reports
+      description: Attempts fetch without pushing. Cached refs are used offline or after fetch errors. Semantic analysis and document extraction run locally only.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: array
-              items:
-                $ref: '#/components/schemas/Project'
+              $ref: '#/components/schemas/RefreshRequest'
       responses:
         '200':
-          description: Resolved project registry and new revision.
-          headers:
-            ETag:
-              $ref: '#/components/headers/ETag'
+          description: Per-repository fetch and analysis outcomes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshResponse'
+        '409':
+          description: External report modification detected; preserve both versions for explicit resolution.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportConflict'
+        '422':
+          $ref: '#/components/responses/Problem'
+  /reports:
+    get:
+      tags: [Reports]
+      summary: List dates with saved reports
+      responses:
+        '200':
+          description: Available report dates, newest first.
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Project'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/DocumentConflict'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-  /projects/{project_id}/activity:
-    parameters:
-      - name: project_id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-    get:
-      tags: [Projects]
-      summary: Read project history, latest next steps, and unresolved blockers
-      responses:
-        '200':
-          description: Project activity summary.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProjectActivity'
-        '404':
-          $ref: '#/components/responses/NotFound'
-  /backup/status:
-    get:
-      tags: [Backup]
-      summary: Read backup configuration and last run status
-      responses:
-        '200':
-          description: Backup status without credentials.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BackupStatus'
-  /backup/configuration:
-    put:
-      tags: [Backup]
-      summary: Configure or disable a private backup destination
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/BackupConfigurationInput'
-      responses:
-        '200':
-          description: Sanitized backup configuration and status.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BackupStatus'
-        '422':
-          $ref: '#/components/responses/ValidationError'
+                  type: string
+                  format: date
   /settings:
     get:
-      tags: [Settings]
-      summary: Read local workspace and preferences
+      tags: [Reports]
+      summary: Read local workspace, theme, and analyzer configuration
       responses:
         '200':
-          description: Current settings.
+          description: Local application settings.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Settings'
     patch:
-      tags: [Settings]
-      summary: Update basic preferences
+      tags: [Reports]
+      summary: Update theme or local model CLI configuration
       requestBody:
         required: true
         content:
@@ -355,317 +123,418 @@ paths:
               $ref: '#/components/schemas/SettingsPatch'
       responses:
         '200':
-          description: Updated settings.
+          description: Updated local settings.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Settings'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          $ref: '#/components/responses/Problem'
+  /reports/{date}:
+    parameters:
+      - name: date
+        in: path
+        required: true
+        schema:
+          type: string
+          format: date
+    get:
+      tags: [Reports]
+      summary: Read a saved daily report and its evidence
+      responses:
+        '200':
+          description: Daily report and Markdown revision.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyReport'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Problem'
+  /reports/{date}/context:
+    parameters:
+      - name: date
+        in: path
+        required: true
+        schema:
+          type: string
+          format: date
+    put:
+      tags: [Reports]
+      summary: Add or update one-line user-reported context
+      description: Send one text line to add/update or null to remove context. Context is shown in Điểm chính with explicit user attribution and is not treated as Git-derived evidence.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserContextInput'
+      responses:
+        '200':
+          description: Updated daily report.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyReport'
+        '409':
+          description: Report changed externally; preserve both versions.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportConflict'
+        '422':
+          $ref: '#/components/responses/Problem'
+  /reports/{date}/conflicts/{conflict_id}:
+    parameters:
+      - name: date
+        in: path
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: conflict_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [Reports]
+      summary: Read both versions of an externally changed report
+      responses:
+        '200':
+          description: External Markdown and generated report candidate.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportConflict'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /reports/{date}/conflicts/{conflict_id}/resolve:
+    parameters:
+      - name: date
+        in: path
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: conflict_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags: [Reports]
+      summary: Save the user's explicit conflict resolution
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/DailyReport'
+                - type: object
+                  required: [date, keep_external]
+                  properties:
+                    date:
+                      type: string
+                      format: date
+                    keep_external:
+                      type: boolean
+                      const: true
+      responses:
+        '200':
+          description: Resolved report saved.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyReport'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: A newer external edit was detected; neither version was overwritten.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportConflict'
+        '422':
+          $ref: '#/components/responses/Problem'
 components:
   parameters:
-    Date:
-      name: date
-      in: path
-      required: true
-      schema:
-        type: string
-        format: date
     IfMatch:
       name: If-Match
       in: header
       required: true
-      description: ETag returned by the last read of the edited Markdown document.
+      description: ETag from the latest report read or conflict state.
       schema:
         type: string
   headers:
     ETag:
-      description: Quoted SHA-256 revision of the saved Markdown document.
+      description: Quoted SHA-256 revision of the Markdown report.
       schema:
         type: string
   responses:
+    Problem:
+      description: Invalid repository, unsupported content, analysis failure, or persistence error.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
     NotFound:
-      description: The requested conflict or project does not exist.
+      description: Repository, report, or conflict does not exist.
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
-    ValidationError:
-      description: Invalid request, date, or unsupported Markdown schema.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-    JournalConflict:
-      description: The daily journal changed since the client read it; both versions are preserved.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/JournalConflict'
-    DocumentConflict:
-      description: The project registry changed since the client read it; both versions are preserved.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/DocumentConflict'
   schemas:
-    EntryType:
-      type: string
-      enum: [work, note, blocker]
-    JournalEntry:
+    RepositoryInput:
       type: object
-      required: [id, created_at, date, type, description]
+      required: [path]
+      properties:
+        path:
+          type: string
+          minLength: 1
+        remote_name:
+          type: [string, 'null']
+          description: Defaults to origin if present; otherwise must select a configured remote.
+        display_name:
+          type: [string, 'null']
+    Repository:
+      type: object
+      required: [id, path, display_name, remote_name, author_email, last_fetch_status]
       properties:
         id:
           type: string
-          format: uuid
-        created_at:
+        path:
           type: string
-          format: date-time
-          description: Immutable UTC timestamp created when the entry is first saved.
-        date:
+        display_name:
           type: string
-          format: date
-        type:
-          $ref: '#/components/schemas/EntryType'
-          default: work
-        description:
+        remote_name:
           type: string
-          minLength: 1
-          description: Must contain a non-whitespace character.
-        project_id:
-          type: [string, 'null']
-          format: uuid
-        tags:
-          type: array
-          items:
-            type: string
-        result:
-          type: [string, 'null']
-        blocker:
-          type: [string, 'null']
-        blocker_resolved_at:
+        author_email:
+          type: string
+        last_fetch_at:
           type: [string, 'null']
           format: date-time
-          description: Null means unresolved; set when the user marks this entry's blocker resolved.
-        next_step:
-          type: [string, 'null']
-        references:
-          type: array
-          items:
-            type: string
-        notes:
-          type: [string, 'null']
-    DailyReflection:
-      type: object
-      properties:
-        accomplishments:
-          type: [string, 'null']
-        blockers:
-          type: [string, 'null']
-          description: Descriptive reflection text; it has no separate resolved state.
-        next_steps:
-          type: [string, 'null']
-    DailyJournal:
-      type: object
-      required: [date, entries]
-      properties:
-        date:
+        last_fetch_status:
           type: string
-          format: date
-        entries:
-          type: array
-          items:
-            $ref: '#/components/schemas/JournalEntry'
-        reflection:
-          oneOf:
-            - $ref: '#/components/schemas/DailyReflection'
-            - type: 'null'
-    SearchResult:
-      type: object
-      required: [date, entry]
-      properties:
-        date:
-          type: string
-          format: date
-        entry:
-          $ref: '#/components/schemas/JournalEntry'
-    PreviousContext:
-      type: object
-      required: [source_date, next_steps, blockers]
-      properties:
-        source_date:
-          type: string
-          format: date
-        next_steps:
-          type: array
-          maxItems: 5
-          description: Newest first; selected across all prior dates.
-          items:
-            $ref: '#/components/schemas/JournalEntry'
-        blockers:
-          type: array
-          maxItems: 5
-          description: Unresolved entry blockers, newest first; reflection text is excluded.
-          items:
-            $ref: '#/components/schemas/JournalEntry'
-    TodayResponse:
-      type: object
-      required: [date, journal, previous_context]
-      properties:
-        date:
-          type: string
-          format: date
-        journal:
-          $ref: '#/components/schemas/DailyJournal'
-        previous_context:
-          type: array
-          description: Groups the global five newest next steps and five newest unresolved entry blockers by source date.
-          items:
-            $ref: '#/components/schemas/PreviousContext'
-    JournalConflict:
-      type: object
-      required: [conflict_id, date, expected_revision, current_revision, local, external]
-      properties:
-        conflict_id:
-          type: string
-          format: uuid
-        date:
-          type: string
-          format: date
-        expected_revision:
-          type: string
-        current_revision:
-          type: string
-        local:
-          $ref: '#/components/schemas/DailyJournal'
-        external:
-          $ref: '#/components/schemas/DailyJournal'
-    DocumentConflict:
-      type: object
-      required: [conflict_id, expected_revision, current_revision, local, external]
-      description: Both registry versions are preserved as Markdown until the resolution saves successfully; newer external edits produce a new conflict.
-      properties:
-        conflict_id:
-          type: string
-          format: uuid
-        expected_revision:
-          type: string
-        current_revision:
-          type: string
-        local:
-          type: array
-          items:
-            $ref: '#/components/schemas/Project'
-        external:
-          type: array
-          items:
-            $ref: '#/components/schemas/Project'
-    Project:
-      type: object
-      required: [id, name, created_at]
-      properties:
-        id:
-          type: string
-          format: uuid
-        name:
-          type: string
-          minLength: 1
-          description: Unique case-insensitively among active projects. Renaming preserves the ID and changes the name displayed for historical entries.
-        created_at:
-          type: string
-          format: date-time
-        archived_at:
-          type: [string, 'null']
-          format: date-time
-          description: Non-null means archived; historical entries show the archived project label.
-    ProjectActivity:
-      type: object
-      required: [project, entries, latest_next_steps, unresolved_blockers]
-      properties:
-        project:
-          $ref: '#/components/schemas/Project'
-        entries:
-          type: array
-          items:
-            $ref: '#/components/schemas/SearchResult'
-        latest_next_steps:
-          type: array
-          maxItems: 5
-          description: Entries with next steps, newest first.
-          items:
-            $ref: '#/components/schemas/SearchResult'
-        unresolved_blockers:
-          type: array
-          maxItems: 5
-          description: Unresolved entry blockers, newest first; reflection text is excluded.
-          items:
-            $ref: '#/components/schemas/SearchResult'
-    BackupConfigurationInput:
-      type: object
-      required: [enabled, private_confirmed]
-      properties:
-        enabled:
-          type: boolean
-        remote_url:
-          type: [string, 'null']
-        branch:
-          type: string
-          default: main
-        private_confirmed:
-          type: boolean
-          description: Must be true before any remote push is enabled. The user asserts the destination is private and suitable for personal journal data; Commitly does not verify remote privacy.
-    BackupStatus:
-      type: object
-      required: [enabled, configured, private_confirmed, pending_commits]
-      properties:
-        enabled:
-          type: boolean
-        configured:
-          type: boolean
-        destination_label:
-          type: [string, 'null']
-        private_confirmed:
-          type: boolean
-        branch:
-          type: string
-          default: main
-        last_attempt_at:
-          type: [string, 'null']
-          format: date-time
-        last_success_at:
-          type: [string, 'null']
-          format: date-time
-        pending_commits:
-          type: integer
-          minimum: 0
+          enum: [success, failed, never]
         last_error:
           type: [string, 'null']
+          description: Sanitized message without credentials.
+    RefreshRequest:
+      type: object
+      required: [from, to]
+      properties:
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        repository_ids:
+          type: array
+          items:
+            type: string
+          description: Omit to refresh all selected repositories.
+    RefreshResponse:
+      type: object
+      required: [from, to, repositories]
+      properties:
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        repositories:
+          type: array
+          items:
+            type: object
+            required: [repository_id, fetch_status, analysis_status, report_dates]
+            properties:
+              repository_id:
+                type: string
+              fetch_status:
+                type: string
+                enum: [success, failed, cached]
+              last_verified_at:
+                type: [string, 'null']
+                format: date-time
+              analysis_status:
+                type: string
+                enum: [complete, partial, unavailable]
+              report_dates:
+                type: array
+                items:
+                  type: string
+                  format: date
+              error:
+                type: [string, 'null']
+    EvidenceLog:
+      type: object
+      required: [id, repository_id, repository_name, repository_path, commit_id, authored_at, changed_paths, analysis_status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        repository_id:
+          type: string
+        repository_name:
+          type: string
+        repository_path:
+          type: string
+        commit_id:
+          type: string
+        authored_at:
+          type: string
+          format: date-time
+        subject:
+          type: string
+        changed_paths:
+          type: array
+          items:
+            type: string
+        added_lines:
+          type: [integer, 'null']
+          minimum: 0
+        deleted_lines:
+          type: [integer, 'null']
+          minimum: 0
+        analysis_status:
+          type: string
+          enum: [complete, partial, unsupported, failed]
+        analysis_note:
+          type: [string, 'null']
+    ReportClaim:
+      type: object
+      required: [id, text, evidence_ids, certainty]
+      properties:
+        id:
+          type: string
+          format: uuid
+        text:
+          type: string
+        evidence_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        certainty:
+          type: string
+          enum: [supported, uncertain]
+    DailyReport:
+      type: object
+      required: [date, summary, highlights, details, evidence, user_context, analysis_status]
+      properties:
+        date:
+          type: string
+          format: date
+        summary:
+          $ref: '#/components/schemas/ReportClaim'
+        highlights:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportClaim'
+        details:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportClaim'
+        evidence:
+          type: array
+          items:
+            $ref: '#/components/schemas/EvidenceLog'
+        user_context:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserContext'
+        analysis_status:
+          type: string
+          enum: [complete, partial, unavailable]
+    UserContext:
+      type: object
+      required: [id, created_at, text]
+      properties:
+        id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        text:
+          type: string
+          minLength: 1
+          description: Exactly one non-empty line after trimming.
+    UserContextInput:
+      type: object
+      properties:
+        text:
+          type: [string, 'null']
+          maxLength: 500
+          description: One line to add/update, or null/empty to remove.
     Settings:
       type: object
-      required: [workspace_path, theme]
+      required: [workspace_path, theme, model_path, model_executable]
       properties:
         workspace_path:
           type: string
-          readOnly: true
-          description: Resolved local journal workspace path; changing it is outside the MVP.
         theme:
           type: string
           enum: [system, light, dark]
+        model_path:
+          type: [string, 'null']
+        model_executable:
+          type: string
     SettingsPatch:
       type: object
       properties:
         theme:
           type: string
           enum: [system, light, dark]
+        model_path:
+          type: [string, 'null']
+        model_executable:
+          type: string
+    ReportConflict:
+      type: object
+      required: [conflict_id, date, external_markdown, external_report, generated_report, external_revision]
+      properties:
+        conflict_id:
+          type: string
+          format: uuid
+        date:
+          type: string
+          format: date
+        external_markdown:
+          type: string
+        external_report:
+          $ref: '#/components/schemas/DailyReport'
+        generated_report:
+          $ref: '#/components/schemas/DailyReport'
+        external_revision:
+          type: string
     Error:
       type: object
-      required: [code, message]
+      required: [message]
       properties:
-        code:
-          type: string
         message:
           type: string
-        details:
-          type: object
-          additionalProperties: true
+        path:
+          type: [string, 'null']
+        recovery_action:
+          type: [string, 'null']

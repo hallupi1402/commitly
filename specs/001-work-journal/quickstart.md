@@ -1,60 +1,37 @@
-# Commitly MVP Quickstart and Validation
+# Commitly Semantic Report Baseline: Setup and Validation
 
-This guide describes how to install, run, and validate the Commitly MVP. Journal
-features work locally without network access after dependencies are installed.
+Semantic analysis requires a separately installed local llama.cpp CLI and GGUF
+model. Commitly does not install or download model files.
 
 ## Prerequisites
 
-- Linux with a systemd user manager for scheduled backup validation.
-- Python 3.12 or newer and `uv`.
-- Node.js 22.12 or newer and npm.
-- Git CLI.
+- Linux desktop, Python 3.12+, `uv`, Node.js 22.12+, npm, and Git.
+- Optional: `llama-cli` on `PATH` and a local GGUF model file. The Settings page
+  stores their executable name and model path. Without them, Git source logs and
+  Markdown reports remain available while semantic prose is marked unavailable.
+- At least one local Git repository with a remote and repository-local `user.email`.
 
-## Install Development Dependencies
+## Run
 
 From the repository root:
 
 ```sh
 uv sync --project backend --dev
 npm ci --prefix frontend
+uv run --project backend uvicorn commitly.app:app --host 127.0.0.1 --port 8000
 ```
 
-Dependency installation may use the network. Once installed, all journal
-development and runtime checks below are local; network access is only needed to
-test an explicitly configured Git remote.
-
-To install the one-shot backup command and user timer after dependency setup:
-
-```sh
-uv tool install --editable ./backend
-install -Dm644 systemd/commitly-backup.service ~/.config/systemd/user/commitly-backup.service
-install -Dm644 systemd/commitly-backup.timer ~/.config/systemd/user/commitly-backup.timer
-systemctl --user daemon-reload
-systemctl --user enable --now commitly-backup.timer
-```
-
-The timer runs while the user manager is active, including with the UI closed.
-`Persistent=true` catches up after the next login if the manager was stopped.
-Linger remains disabled by default, and no credentials are placed in unit files.
-
-## Run in Development
-
-In one terminal, start the loopback-only FastAPI service:
-
-```sh
-uv run --project backend uvicorn commitly.app:app --reload --host 127.0.0.1 --port 8000
-```
-
-In another terminal, start Vite with its `/api` proxy:
+In another terminal:
 
 ```sh
 npm --prefix frontend run dev -- --host 127.0.0.1
 ```
 
-Open the loopback address printed by Vite. Neither server should bind to `0.0.0.0`
-or expose the journal to the local network.
+Use the loopback address printed by Vite. Never bind to `0.0.0.0`.
 
 ## Automated Checks
+
+Run the checks declared by the manifests:
 
 ```sh
 uv run --project backend pytest backend/tests
@@ -62,51 +39,44 @@ npm --prefix frontend test
 npm --prefix frontend run build
 ```
 
-The backend suite covers Markdown round-trip and validation, stable IDs and
-timestamps, atomic exchange failure, external-edit conflicts, CRUD, project and
-reflection persistence, search/filter behavior, and backup commits/push failures.
-The contract suite compares the FastAPI-generated OpenAPI document with
-[`contracts/openapi.yaml`](contracts/openapi.yaml). Frontend checks cover Quick
-Capture, keyboard submission, editing flows, empty/error states, keyboard access,
-and dark mode.
+The frontend build runs TypeScript checking. There are no separate lint or
+typecheck scripts. Backend Git tests use disposable repositories and local bare
+remotes; analyzer tests use an injected stub. No personal source code or reports
+belong in tests or logs.
 
-## Acceptance Walkthroughs
+## Acceptance Walkthrough
 
-1. **Capture and restart**: Save a one-line entry with the default Work type. Confirm
-   it appears in today's timeline. Stop and restart the app, reopen the same date,
-   and confirm its ID, creation timestamp, text, and optional fields remain.
-2. **Keyboard and offline**: Save with Ctrl+Enter and Cmd+Enter on their respective
-   platforms. Disable network access and create, browse, search, edit, and delete
-   entries; all local operations must still complete.
-3. **External file safety**: Edit a loaded daily journal and project registry outside
-   the app, then attempt app saves. Confirm both conflicts preserve both versions and
-   allow explicit resolution. Edit the journal again during resolution and confirm a
-   new conflict preserves that edit. Confirm recovery copies are removed only after a
-   successful resolution. Try malformed/unsupported Markdown; verify it stays intact
-   and the error tells the user to copy and repair it manually.
-4. **Search and projects**: Seed 1,000 entries across dates, entry types, and projects.
-   Search and filter; verify every expected result and source date. Confirm Today shows
-   up to five newest next steps and unresolved entry blockers across all dates, and
-   project activity uses the same ordering. Rename and archive a project; verify old
-   entries show its current name and archived label.
-5. **Git backup success**: Use a disposable local bare Git repository configured as
-   the test destination. In Settings, check “I confirm that this Git destination is
-   private and appropriate for storing my personal journal.” This is a user assertion;
-   Commitly does not verify remote privacy. Create journal changes,
-   run the backup job, and confirm a local commit and remote push. Run it again
-   without changes and confirm no empty commit appears.
-6. **Git backup failure**: After making a local backup commit, make the remote
-   unavailable or reject authentication. Confirm the commit remains locally, status
-   exposes a sanitized error and pending count, and the next scheduled run pushes the
-   retained commit without reset, cleanup, or force push. Confirm credentials are
-   read from the Git credential helper and never stored in settings/service variables
-   or logged.
-7. **Scheduled backup**: Install the user timer and one-shot service, inspect the
-   next run with `systemctl --user list-timers`, and confirm the timer catches up
-   after a missed activation when the user manager next starts. Linger remains
-   disabled by default.
-8. **Private paths and accessibility**: Confirm the default journal workspace is
-   under the user's data directory and outside the source checkout; Settings displays
-   its read-only path. Confirm primary workflows have visible keyboard focus, named
-   semantic controls, and announced save/error status. Confirm the app and development
-   server bind only to loopback.
+Create a temporary repository and temporary bare remote. Configure a test author
+identity locally in that repository. Add commits for: (a) a small behavior change
+plus tests, (b) a paper with known text, and (c) a metadata-only change. Push them
+to the disposable remote and register the repository.
+
+1. Refresh the test date range. Confirm report output is in Vietnamese and has
+   exactly **Tóm tắt**, **Điểm chính**, **Chi tiết**, and **Log nguồn**.
+2. Confirm the code-change bullet explains the changed behavior and test coverage
+   using the diff, not only the commit subject or line counts.
+3. Confirm the paper bullet describes the file addition/update and summarizes
+   extracted content; it must not claim the developer read it based only on the
+   commit.
+4. Confirm every claim points to evidence with repository name/path, commit ID,
+   timestamp, changed paths, and line counts where known.
+5. Confirm the metadata-only change does not become an invented accomplishment.
+6. Add a one-line user context note for work not represented in Git. Confirm it
+   appears as user-reported context and is not treated as Git evidence.
+7. Refresh again and restart. Confirm no duplicate repository+commit evidence and
+   report Markdown remains readable.
+8. Disable network. Confirm cached refs and installed local analysis still produce
+   reports; the UI shows the last verified remote time.
+9. Make the remote unavailable. Confirm the prior source's evidence remains and
+   its status is unverified; successful repositories can still update.
+10. Add an unsupported or oversized changed document. Confirm its path remains in
+   the log, its analysis is marked unavailable, and other report items succeed.
+11. Modify a report externally and attempt a refresh. Confirm both report versions
+    remain recoverable and a newer external edit creates another conflict.
+12. Inspect network behavior. During analysis there must be no outbound request;
+    refresh may contact only the explicitly selected Git remote and must never
+    push.
+13. Complete refresh, browse, and source inspection with keyboard-only input and
+    dark mode; confirm visible focus and announced status.
+
+Record only walkthroughs actually executed in `docs/verification-report.md`.

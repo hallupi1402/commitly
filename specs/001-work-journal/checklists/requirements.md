@@ -1,41 +1,36 @@
-# Specification Quality Checklist: Commitly — Work Journal First
+# Specification Quality Checklist: Commitly Semantic Daily Work Report
 
-**Purpose**: Validate specification completeness and quality before proceeding to planning
+**Purpose**: Validate specification completeness and clarity before planning and
+implementation.
 **Created**: 2026-11-10
 **Feature**: [spec.md](../spec.md)
 
 ## Content Quality
 
-- [x] No implementation details (languages, frameworks, APIs)
-- [x] Focused on user value and business needs
-- [x] Written for non-technical stakeholders
-- [x] All mandatory sections completed
+- [x] Focuses on the user outcome: a natural-language report of completed work.
+- [x] Defines the three prose sections and supporting Git source log.
+- [x] Keeps the exact model/runtime implementation out of user-facing requirements.
+- [x] Separates baseline scope from later branches.
 
 ## Requirement Completeness
 
-- [x] No [NEEDS CLARIFICATION] markers remain
-- [x] Requirements are testable and unambiguous
-- [x] Success criteria are measurable
-- [x] Success criteria are technology-agnostic (no implementation details)
-- [x] All acceptance scenarios are defined
-- [x] Edge cases are identified
-- [x] Scope is clearly bounded
-- [x] Dependencies and assumptions identified
+- [x] Git source selection, pushed-commit boundary, author identity, and refresh
+  behavior are defined.
+- [x] Code and supported paper/document analysis are defined as local behavior.
+- [x] Offline cached-ref behavior and last-verification status are defined.
+- [x] Evidence traceability, uncertainty, failure, and data safety are defined.
+- [x] No unresolved clarification markers remain.
 
-## Feature Readiness
+## Acceptance Quality
 
-- [x] All functional requirements have clear acceptance criteria
-- [x] User scenarios cover primary flows
-- [x] Feature meets measurable outcomes defined in Success Criteria
-- [x] No implementation details leak into specification
+- [x] User stories include independent tests and acceptance scenarios.
+- [x] Generated prose quality is checked against known code/document fixtures.
+- [x] Success criteria are verifiable without claiming unrun tests.
+- [x] Accessibility, dark mode, empty states, and errors are covered.
 
 ## Notes
 
-- Scheduling behavior when Commitly is closed or the backup destination is unavailable
-  is defined in Assumptions; the next scheduled run is deferred until Commitly is
-  available.
-- Blockers remain unresolved until explicitly marked resolved; history is preserved.
-- A backup destination is unset by default and remote backup is limited to the
-  user-configured destination.
-- Keyboard access, dark mode, external file conflicts, offline use, and restart
-  persistence have explicit acceptance checks or measurable outcomes.
+- Local model/runtime and supported document formats remain a blocking technical
+  research task before implementation, not an unresolved product-scope question.
+- The app must not claim that a developer read a document based only on its
+  addition or modification in Git.

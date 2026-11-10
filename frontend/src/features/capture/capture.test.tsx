@@ -11,6 +11,7 @@ describe("QuickCapture", () => {
     await user.type(screen.getByLabelText("Work description"), "  Fixed startup  ");
     await user.keyboard("{Control>}{Enter}{/Control}");
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ description: "Fixed startup", type: "work", date: "2026-11-10" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Entry saved");
   });
 
   it("requires a non-whitespace description and keeps details optional", async () => {

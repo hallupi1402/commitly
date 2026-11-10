@@ -1,362 +1,272 @@
-# Feature Specification: Commitly — Work Journal First
+# Feature Specification: Commitly — Semantic Daily Work Report
 
-**Feature Branch**: `001-work-journal` (spec identifier; no branch hook is configured)
+**Feature Branch**: `001-work-journal`
 
 **Created**: 2026-11-10
 
-**Status**: Draft
+**Status**: Draft for user scope review
 
-**Input**: User description: Commitly — Work Journal First MVP, as described in the product overview, functional requirements, non-goals, and quality expectations.
+## Product Brief
 
-## Clarifications
+Commitly is a personal, local-first developer work journal. Its main purpose is to
+record what the developer actually accomplished and produce a useful daily report
+in natural language, so they can review progress and resume tomorrow.
 
-### Session 2026-11-10
+**Product vision**: Capture today. Continue tomorrow.
 
-- Q: After a user configures a Git backup destination, should scheduled backups automatically push to it only if the user confirms it is private? → A: Scheduled backups automatically push daily to the user-selected destination after the user confirms it is private.
-- Q: When Commitly detects that a journal changed outside the app while the user also has unsaved edits, how should they resolve the conflict? → A: Show both versions, save neither automatically, and let the user compare, combine, or explicitly choose a version while both originals remain recoverable until the conflict is resolved.
+**Primary user**: An individual developer working across selected Git repositories.
 
-## User Scenarios & Testing *(mandatory)*
+The baseline reads commits already pushed to the selected repositories and analyzes
+their code changes locally. It also reads the contents of newly added or changed
+paper/document files where supported. It turns this evidence into a Vietnamese
+daily report with three sections: a short overall summary, accomplishment bullets,
+and a more detailed explanation. A source log records each repository, commit,
+changed path, and change statistics.
 
-### User Story 1 - Capture and Continue Work (Priority: P1)
+The analysis must explain what the code changes do, not just repeat commit subjects
+or count lines. It must keep claims tied to their source files and commits. Git alone
+cannot prove that the developer read a paper or understood it: when a paper file is
+added, the report must say that the file was added/updated and summarize its
+contents, rather than assert that the user read it unless the commit evidence says
+so.
 
-As a developer, I want to record completed work with minimal effort and reopen my
-journal later, so that I preserve useful technical context and can continue tomorrow.
+## Baseline Scope
 
-**Why this priority**: Capturing and retaining completed work is the product's core
-value. Without it, the rest of the journal has nothing to review.
+The baseline includes:
 
-**Independent Test**: Create a one-line entry without optional details, close and
-reopen Commitly, and confirm the entry and its timestamp are still present.
+1. Explicit registration of local Git repositories.
+2. User-triggered fetch of configured remote refs without pushing, then discovery
+   of commits reachable from those refs for a selected local date range. Cached
+   refs can be processed offline and are marked with their last verification time.
+3. Local analysis of commit metadata, code diffs, and relevant changed files. For
+   changed paper/document files, extract readable text locally and summarize its
+   content where extraction is supported.
+4. One Markdown report per local date, with exactly these report sections:
+   - **Tóm tắt**: a short natural-language overview of the day's work.
+   - **Điểm chính**: concise bullets for accomplishments such as a feature
+     implemented or a paper/document added and its relevant subject.
+   - **Chi tiết**: a clearer explanation of what changed and why, grouped by
+     repository and work item.
+5. A **Log nguồn** section attached to each report with repository name/path,
+   commit ID/time/subject, changed paths, and additions/deletions where known.
+6. Optional one-line context for work Git cannot prove. It appears in Điểm chính
+   as user-reported, not Git-derived, context.
+7. Browsing saved reports offline. Reports are stored as human-readable Markdown
+   outside the public application checkout.
 
-**Acceptance Scenarios**:
+The baseline uses semantic analysis locally on the user's machine. It MUST NOT send
+source code, diffs, paper contents, or report text to an AI/cloud service. The
+specific local model/runtime is a plan-time research decision that must be settled
+before implementation; it must not introduce a resident background service.
 
-1. **Given** the Today Dashboard is open, **When** the user enters a description and
-   saves it, **Then** a Work entry appears in today's timeline with an ID and timestamp.
-2. **Given** the user is composing an entry, **When** they press Ctrl+Enter or
-   Cmd+Enter, **Then** the entry is saved without requiring another control.
-3. **Given** a saved entry, **When** the user edits or deletes it, **Then** the
-   timeline and saved journal reflect that action, an edited entry keeps its ID and
-   creation timestamp, and unrelated entries remain intact.
-4. **Given** Commitly is reopened after saving, **When** the user views that journal
-   date, **Then** the entry, ID, timestamp, and optional details are preserved.
-5. **Given** the journal is opened without network access, **When** the user creates,
-   reads, edits, or deletes an entry, **Then** the operation completes offline.
-6. **Given** the user is composing an entry, **When** they choose Note or Blocker and
-   add any optional fields, **Then** the chosen type and supplied details are saved
-   while omitted fields remain optional.
-7. **Given** a journal changed outside Commitly while the user has unsaved edits,
-   **When** the conflict is detected, **Then** both versions are shown, neither is
-   saved over automatically, and both remain recoverable while the user compares,
-   combines, or chooses a version and explicitly saves the resolution.
-8. **Given** the journal changes again while the user is resolving a conflict,
-   **When** the user submits against the older external revision, **Then** Commitly
-   preserves the newer external version and draft and presents a new conflict.
+The baseline does not monitor the working tree, terminal, editor, or user activity;
+it does not infer uncommitted work; it does not add structured journal fields,
+projects, reflections, scheduled Git backup, or AI-generated personal reflections.
 
----
+## User Scenarios & Testing
 
-### User Story 2 - Review Today and Prior Context (Priority: P2)
+### User Story 1 — Generate a Natural-Language Daily Report (P1)
 
-As a developer, I want to see today's work and relevant previous context, so that I
-can pick up ongoing work and reflect before ending the day.
+As a developer, I want Commitly to analyze the code and documents changed by my
+pushed commits and explain my work in plain language, so I can receive a meaningful
+daily report instead of a list of commit subjects and file counts.
 
-**Why this priority**: Reviewing context turns individual captures into a continuing
-work journal and supports the product vision.
+**Why this priority**: A report that explains the work is the core product outcome.
 
-**Independent Test**: Add entries on two dates, open today's dashboard, and confirm
-the current local date, today's timeline, and clearly dated prior next steps and
-blockers are available; add and edit a reflection without making it mandatory.
-
-**Acceptance Scenarios**:
-
-1. **Given** the Today Dashboard is open, **When** the user views it, **Then** it
-   displays the current local date and today's entries in timestamp order.
-2. **Given** prior journals contain entries, **When** the user opens today's
-   dashboard, **Then** the dashboard shows prior next steps and blockers with their
-   source dates, newest first, showing up to five of each kind. It searches all
-   prior dates so older unresolved blockers are not hidden by a date cutoff.
-3. **Given** the user wants to reflect, **When** they enter accomplishments,
-   blockers, or next steps, **Then** the reflection is saved for that date and can
-   be edited later.
-4. **Given** the user has no reflection for today, **When** they view or leave the
-   day, **Then** Commitly does not require a reflection or mark the day incomplete.
-5. **Given** the local date changes, **When** the user opens the dashboard, **Then**
-   it shows the new local date and that date's journal.
-
----
-
-### User Story 3 - Find Work and Manage Projects (Priority: P3)
-
-As a developer working across projects, I want to browse and search past entries and
-see project activity, so that I can recover details without manually opening every
-journal.
-
-**Why this priority**: History and project context make accumulated entries useful
-over time, after the basic capture and review journeys work.
-
-**Independent Test**: Create dated entries across two projects and entry types, then
-browse by date, search by keyword, filter by project and type, and review one
-project's activity and current next steps/blockers.
+**Independent Test**: Use disposable selected repositories with known commits:
+implement a small behavior change with tests, add a paper with known content, and
+make an unrelated metadata-only change. Refresh a known date range and verify the
+Vietnamese report has the three requested sections, explains the behavior and paper
+content accurately, does not invent an action, and links every work item to source
+commit and file evidence.
 
 **Acceptance Scenarios**:
 
-1. **Given** entries exist on multiple dates, **When** the user browses dates and
-   opens a prior journal, **Then** entries and reflection for the selected date are
-   shown and prior entries can be edited.
-2. **Given** journal text contains a search term, **When** the user searches for it,
-   **Then** matching entries are shown with their dates; a search with no matches
-   gives a clear empty state.
-3. **Given** entries have projects and types, **When** the user applies project or
-   entry-type filters, **Then** only matching entries are shown and filters can be
-   cleared.
-4. **Given** a project is active, **When** the user creates, renames, or archives it,
-   **Then** its activity history remains available and archiving does not delete
-   associated entries.
-5. **Given** a project has recorded next steps or blockers, **When** the user opens
-   its activity history, **Then** the latest next steps and unresolved blockers are
-   shown with their source entries and dates, newest first and limited to five of
-   each kind. Only unresolved entry blockers count; reflection text is not a project
-   blocker.
-6. **Given** a blocker is no longer active, **When** the user marks it resolved,
-   **Then** it is no longer listed as an unresolved blocker and remains in history.
-7. **Given** the user creates an entry without choosing a project, **When** it is
-   saved, **Then** it remains available as an unassigned entry.
-8. **Given** a project is renamed or archived, **When** the user opens an older
-   associated entry, **Then** its stable project ID still links it to the project and
-   the current project name is shown, with an archived label when applicable.
+1. **Given** the user has selected a repository with pushed commits, **When** they
+   refresh a date range, **Then** Commitly fetches the configured remote without
+   pushing and analyzes commits reachable from the remote refs.
+2. **Given** a commit changes code behavior and tests, **When** its report is
+   generated, **Then** the prose explains the behavior implemented and relevant
+   tests using the changed code as evidence, rather than merely repeating the
+   subject or line counts.
+3. **Given** a commit adds or changes a readable paper/document, **When** it is
+   analyzed, **Then** the report names the file and summarizes its main content
+   from locally extracted text. It does not claim the user read or understood it
+   based only on the file change.
+4. **Given** a report is generated, **When** the user opens it, **Then** it has
+   Tóm tắt, Điểm chính, and Chi tiết sections, followed by Log nguồn with source
+   repository, commit, path, and change facts.
+5. **Given** a report sentence describes an accomplishment, **When** the user
+   follows its evidence, **Then** the sentence links to one or more source commits
+   and changed paths that support it. Uncertain interpretation is labelled as
+   uncertain or omitted.
+6. **Given** the same commit is found through repeated refreshes or multiple refs,
+   **When** reports are regenerated, **Then** it is represented once per canonical
+   repository identity and full commit object ID.
+7. **Given** a local analysis model is installed and the user is offline,
+   **When** cached remote refs and Git objects are available, **Then** Commitly can
+   generate and read reports without network access.
+8. **Given** remote fetch fails, **When** the user refreshes, **Then** the report
+   retains previously imported items for that repository, marks its remote state
+   unverified, and reports a useful error.
+9. **Given** Commitly cannot analyze a file type, **When** it builds a report,
+   **Then** it still records factual Git activity, marks that file's explanation as
+   unavailable, and does not fail the entire daily report.
+10. **Given** work is not represented by Git, **When** the user adds an optional
+    one-line context note, **Then** it appears in Điểm chính labelled as
+    user-reported and persists with that date's report.
 
----
+### User Story 2 — Browse Reports and Source Evidence (P2)
 
-### User Story 4 - Back Up and Configure the Journal (Priority: P4)
+As a developer, I want to browse reports from previous dates and inspect their
+source logs, so I can recover what changed and continue work later.
 
-As a developer, I want a private, configurable Git backup and clear settings, so
-that I can protect my journal and understand where it is stored and whether it is
-backed up.
-
-**Why this priority**: Backup and settings protect and explain the journal, while
-depending on the capture and persistence journeys being useful first.
-
-**Independent Test**: Configure a private backup destination, save journal changes,
-and verify a scheduled backup reports its status; make the destination unavailable
-and confirm pending commits remain available for a later retry.
+**Independent Test**: Generate reports on multiple dates and repositories, open a
+prior report offline, and verify that summary, bullets, details, and log evidence
+remain readable and traceable.
 
 **Acceptance Scenarios**:
 
-1. **Given** journal changes exist and the user has selected and confirmed a private
-   backup destination, **When** the daily backup runs, **Then** changes are committed
-   locally and automatically pushed to that destination, and the status and result
-   are visible.
-2. **Given** there are no journal changes since the last backup, **When** the daily
-   backup runs, **Then** no empty commit is created.
-3. **Given** the backup destination is unavailable, **When** a backup or sync fails,
-   **Then** the error is shown and local unpushed commits remain available for retry.
-4. **Given** a backup destination is not configured, **When** the user opens backup
-   settings, **Then** Commitly shows that backup is not configured and does not push
-   journal data anywhere.
-5. **Given** a backup destination is configured but not confirmed as private,
-   **When** a scheduled backup runs, **Then** Commitly does not push journal data and
-   asks the user to check: “I confirm that this Git destination is private and
-   appropriate for storing my personal journal.” This is the user's assertion;
-   Commitly does not verify the remote's privacy.
-6. **Given** a destination is configured, **When** Commitly backs up journal data,
-   **Then** it uses only the user-configured destination and never pushes to
-   Commitly's public source repository.
-7. **Given** the user opens Settings, **When** they review configuration, **Then**
-   the local workspace location, basic preferences, and backup destination and status
-   are displayed. The workspace location is read-only in the MVP.
-8. **Given** the systemd user manager is active, **When** the daily timer fires while
-   the UI is closed, **Then** the one-shot backup runs. If the manager was stopped,
-   the persistent timer catches up at the next user login. Authentication or remote
-   failures retain local commits, show a sanitized error, and are retried by the next
-   scheduled run.
+1. **Given** reports exist for multiple dates, **When** the user selects a date,
+   **Then** the report and source logs for that local date are displayed.
+2. **Given** a report item names a repository or file, **When** the user opens its
+   source details, **Then** the commit ID, repository path, changed paths, and
+   change counts are available.
+3. **Given** no report exists for a date, **When** the user opens it, **Then** a
+   clear empty state offers a refresh action.
+4. **Given** the application is offline, **When** a saved report is opened,
+   **Then** all three prose sections and source logs remain readable and no current
+   remote check is claimed.
 
-### Edge Cases
+## Functional Requirements
 
-- A description containing only whitespace cannot be saved; the user receives a
-  clear prompt and no empty entry is created.
-- A save fails because the journal file changed outside Commitly: Commitly shows the
-  user's unsaved changes and the external changes for comparison, preserves both
-  originals, and requires an explicit choice or combined resolution before saving.
-- If a daily journal or project registry contains malformed or unsupported metadata,
-  Commitly leaves the original untouched, explains the path and problem, and tells
-  the user to make a copy and repair it manually before retrying.
-- A project registry changed outside Commitly follows the same compare-and-resolve
-  protection as a journal. A newer edit during resolution creates another conflict
-  and preserves the new external file and local draft.
-- A write is interrupted: the previously saved journal remains readable and intact.
-- Two entries have the same timestamp: both remain distinct by stable ID and appear
-  in a consistent order.
-- An entry refers to an archived project: its historical association remains visible,
-  but the archived project is not offered for new entries.
-- A daily backup is due while the systemd user manager is stopped: the persistent
-  timer runs it after the manager next starts at user login. If the remote or
-  credentials are unavailable, the failed run is reported and the next scheduled
-  run retries; local commits remain intact. The manager must be active for scheduling
-  and linger stays disabled by default.
-- The user has no entries, no search matches, or no project activity: the relevant
-  screen provides a clear empty state and an appropriate next action.
-- The user uses only a keyboard or enables dark mode: all primary workflows remain
-  operable and readable.
+- **FR-001**: The Today view MUST display the local date, the generated daily
+  report's three prose sections, its source log, refresh status, and a refresh
+  action.
+- **FR-002**: Users MUST explicitly select local Git repositories. Commitly MUST
+  NOT search the filesystem or register repositories without user action.
+- **FR-003**: On explicit refresh, Commitly MUST attempt to fetch each selected
+  repository's configured remote refs without pushing. It MUST analyze commits
+  reachable from the latest available remote refs within the selected local date
+  range and authored by the repository's configured `user.email`. Cached refs MUST
+  remain usable offline and show their last successful remote verification time.
+- **FR-004**: Commitly MUST analyze changed code locally, including relevant diff
+  context and changed source files, and explain what behavior changed in plain
+  Vietnamese, plus why where the source evidence supports that explanation.
+  Repeating commit subjects and line counts alone does not satisfy this requirement.
+- **FR-005**: For supported added or changed paper/document files, Commitly MUST
+  extract text locally and include a concise content summary tied to the file.
+  Commitly MUST distinguish a file being added or changed from evidence that the
+  user read it.
+- **FR-006**: Every report MUST contain the sections Tóm tắt, Điểm chính, Chi tiết,
+  and Log nguồn. The first three provide natural-language report prose; Log nguồn
+  records the repository, local path, commit ID, timestamp, subject, changed paths,
+  and additions/deletions where available.
+- **FR-007**: Each Git-derived statement in Tóm tắt, Điểm chính, and Chi tiết
+  MUST link to supporting commit IDs and changed paths. User-provided context MUST
+  be labelled as such. Unsupported claims MUST be omitted; uncertain
+  interpretations MUST be labelled as uncertain.
+- **FR-008**: Commitly MUST deduplicate report evidence by canonical repository
+  identity and full commit object ID.
+- **FR-009**: Daily reports MUST be stored as human-readable, versioned Markdown
+  files outside the public source checkout and remain readable after restart.
+- **FR-010**: Before replacing a report changed outside Commitly, the application
+  MUST preserve both versions and require explicit resolution. If safe atomic
+  writes are unavailable, the original MUST be left untouched and an actionable
+  error shown.
+- **FR-011**: Semantic analysis, document extraction, and report generation MUST
+  run locally. Source code, diffs, paper content, and reports MUST NOT be sent to
+  an AI/cloud service. The baseline MUST NOT install a resident background service.
+- **FR-012**: Report browsing and analysis from locally cached Git refs and objects
+  MUST work offline after local analysis dependencies are installed. Fetching newer
+  remote refs requires a network connection.
+- **FR-013**: A failed repository fetch MUST preserve that repository's previous
+  report evidence, mark the repository unverified, identify the error, and allow
+  successful repositories to refresh independently.
+- **FR-014**: Unsupported file types or analysis errors MUST leave factual source
+  logs available, mark the affected explanation as unavailable, and MUST NOT
+  prevent other commits from being reported.
+- **FR-015**: Empty states, repository errors, parsing errors, model-unavailable
+  states, and persistence failures MUST explain the issue and a useful next step.
+- **FR-016**: The report and source-log flows MUST be keyboard operable with visible
+  focus, accessible names, announced status, and dark-mode support.
+- **FR-017**: Users MUST be able to add, edit, or delete an optional one-line
+  context note without filling structured fields. The report MUST visibly mark it
+  as user-reported and keep it distinct from Git-derived evidence.
 
-## Requirements *(mandatory)*
+## Edge Cases
 
-### Functional Requirements
+- A repository is invalid, lacks a remote, or has no configured author email:
+  report the configuration problem without scanning more paths or including all
+  authors by default.
+- A repository has multiple remotes: choose `origin` if present; otherwise require
+  an explicit selection and display the selected remote name.
+- A fetch fails for one repository while others succeed: preserve that source's
+  existing items and status, while allowing successful repositories to update.
+- A changed document is a PDF or another binary format: use local extraction only
+  when supported; otherwise show its path and unavailable-analysis state.
+- A code change is ambiguous or its surrounding context is insufficient: omit a
+  strong claim or mark the interpretation uncertain; retain exact source evidence.
+- A commit contains secrets or large generated/vendor files: do not include obvious
+  secret values or unbounded generated contents in prose; keep paths and factual
+  metadata in the source log and mark content analysis skipped where needed.
+- A root commit has no parent: analyze its added files as the initial tree.
+- A renamed/deleted/binary/unusually named file is changed: preserve the path
+  accurately and do not report misleading line counts.
+- A report is opened offline or its local analysis runtime is unavailable: saved
+  report text remains readable; a new analysis is marked unavailable rather than
+  silently replaced by an empty report.
+- A report file is externally edited, malformed, or a write is interrupted:
+  preserve existing content and the candidate report and provide a recovery error.
 
-- **FR-001**: The Today Dashboard MUST display the current local date, a prominent
-  Quick Capture input, today's entries in a timeline, prior context, and optional
-  end-of-day reflection.
-- **FR-002**: Users MUST be able to save an entry with only a non-empty text
-  description. New entries MUST default to Work type.
-- **FR-003**: Users MUST be able to choose Work, Note, or Blocker as an entry type
-  and optionally add a project, tags, result, blocker, next step, references, or
-  detailed Markdown notes.
-- **FR-004**: Each entry MUST receive a stable ID and creation timestamp
-  automatically. Editing an entry MUST preserve its ID and creation timestamp.
-  Users MUST be able to edit and delete entries, including entries on prior dates.
-- **FR-005**: Users MUST be able to save from Quick Capture with Ctrl+Enter or
-  Cmd+Enter.
-- **FR-006**: Users MUST be able to browse journals by date, open prior daily
-  journals, search entries by keyword, and filter entries by project and type.
-- **FR-007**: Users MUST be able to create, rename, and archive projects, associate
-  entries with projects, and leave entries unassigned. Archiving a project MUST NOT
-  delete its entries. Project IDs MUST remain stable; older entries MUST display the
-  current project name and an archived label when applicable. Names MUST be unique
-  among active projects, case-insensitively.
-- **FR-008**: Project activity MUST show associated history, latest next steps, and
-  unresolved blockers. Users MUST be able to mark a blocker resolved; resolution
-  MUST preserve the blocker in history. Latest next steps and unresolved blockers
-  MUST be ordered newest first and limited to five each. A blocker is unresolved
-  when an entry is type Blocker or has blocker content and its resolution timestamp
-  is null.
-  Reflection text is descriptive only and is not included in blocker status.
-- **FR-009**: Users MUST be able to record and edit daily reflection fields for
-  accomplishments, blockers, and next steps. A reflection MUST NOT be required to
-  complete or leave a day.
-- **FR-010**: Daily journals and the project registry MUST be saved as
-  human-readable Markdown and preserve IDs, timestamps, and optional details across
-  application restarts. Schema version 1 is the only supported version. Malformed,
-  missing, duplicate, or unsupported metadata MUST leave the original file unchanged
-  and show an actionable error with the file path; the user must copy and repair the
-  file before saving.
-- **FR-011**: Capture, browse, search, edit, delete, project, and reflection
-  operations MUST work without network access.
-- **FR-012**: To prevent unintended overwrites, before saving over a journal or
-  project registry changed outside Commitly, the product MUST detect the conflict
-  and show both versions without saving either over the other. Both originals MUST
-  remain recoverable until
-  the user compares, combines, or explicitly chooses a version and saves the
-  resolution. A newer external edit during resolution MUST create another conflict
-  without replacing either version. Recovery copies MUST be retained until the
-  resolved save succeeds and MAY be removed only afterward. Malformed or unsupported
-  files and filesystems that cannot perform safe atomic writes MUST be left untouched;
-  the user's draft MUST remain recoverable
-  and Commitly MUST show an actionable recovery error.
-- **FR-013**: Commitly MUST support a scheduled daily Git backup of journal changes,
-  MUST automatically push commits to the configured and privacy-confirmed
-  destination, MUST skip empty commits, and MUST retain local unpushed commits after
-  backup or sync failures. A systemd user timer MUST run while the user manager is
-  active, including when the UI is closed, and catch up after the manager starts at
-  the next login. The manager MUST be active for scheduling; linger MUST remain
-  disabled by default. Failed remote/authentication runs MUST show a sanitized error
-  and retry on the next scheduled run. Git credentials MUST come from the user's
-  configured credential helper and MUST NOT be stored in settings or systemd unit
-  variables or written to logs.
-- **FR-014**: Users MUST be able to configure a backup destination and view backup
-  and sync status and errors. With no destination configured or before the user
-  confirms the destination is private, Commitly MUST NOT push journal data. It MUST
-  never automatically push journal data to Commitly's public source repository.
-  Destinations MUST be user-selected and MUST NOT be configured by default. Before
-  enabling a push, the user MUST affirm: “I confirm that this Git destination is
-  private and appropriate for storing my personal journal.” This is a user
-  assertion; Commitly does not verify remote privacy.
-- **FR-015**: Settings MUST display the local workspace location as read-only and
-  allow users to configure basic preferences, including dark mode.
-- **FR-016**: Empty states and errors MUST explain the current state and a useful next
-  action. All primary workflows MUST be operable by keyboard and the interface MUST
-  support dark mode. Interactive controls MUST have accessible names and semantic
-  roles, keyboard focus MUST remain visible, and save/error status MUST be announced
-  to assistive technology.
+## Out of Scope and Later Branches
 
-### Key Entities *(include if feature involves data)*
+- Reading uncommitted working-tree changes, terminal history, IDE/editor events,
+  shell history, issue trackers, or other activity sources.
+- Remote AI/cloud analysis, cloud authentication, multi-user collaboration, and
+  real-time synchronization.
+- Structured manual journal fields, rich projects, project activity, daily reflections,
+  scheduled Git backup of journal data, systemd timer, time tracking, task boards,
+  advanced analytics, and a full Idea Vault.
+- AI-generated reflections or unsupported claims about developer intent.
+- Automatic background monitoring or remote fetching.
 
-- **Journal Entry**: A dated record of completed work, a note, or a blocker. Has a
-  stable ID, timestamp, description, type, and optional project, tags, result,
-  blocker, next step, references, and detailed Markdown notes.
-- **Daily Journal**: The human-readable collection of entries and an optional
-  reflection for one local calendar date.
-- **Daily Reflection**: Optional accomplishments, blockers, and next steps associated
-  with a journal date; editable after creation.
-- **Project**: A user-created grouping for entries with a name and active or archived
-  state. Archiving does not remove its history.
-- **Blocker**: An entry or recorded blocker with unresolved or resolved state, used
-  to show current blockers while preserving historical context.
-- **Backup Configuration**: The user's selected backup destination and its visible
-  configuration and sync status.
+## Success Criteria
 
-## Success Criteria *(mandatory)*
-
-### Measurable Outcomes
-
-- **SC-001**: In usability acceptance checks, a user can save a one-line Work entry
-  from the already-open Today Dashboard in two deliberate actions: enter the
-  description as one text-entry action, then activate Save as the second action.
-- **SC-002**: 100% of saved entries in the persistence acceptance suite retain their
-  IDs, timestamps, and content after closing and reopening the application.
-- **SC-003**: All core journal operations in the acceptance suite complete with
-  network access disabled.
-- **SC-004**: In external-change and interrupted-write acceptance scenarios, zero
-  previously saved or externally changed journal content is silently lost.
-- **SC-005**: In a seeded dataset of 1,000 entries, users can find every expected
-  keyword match with its source date and apply project/type filters; they can also
-  open a prior daily journal without opening unrelated files manually.
-- **SC-006**: In keyboard-only acceptance checks, users can complete capture, browse,
-  edit, and reflection workflows with visible focus, semantically named controls, and
-  announced save/error status; the same workflows remain readable in dark mode.
-- **SC-007**: When a backup destination is unavailable, all local unpushed commits
-  remain available and the user can see the failure status and error.
+- **SC-001**: In a fixture with known code behavior changes, report bullets explain
+  the implemented behavior and cite the relevant commit and changed paths; they do
+  not merely repeat commit subjects or diff statistics.
+- **SC-002**: In a fixture containing a known paper/document, the report names the
+  changed file and correctly summarizes its key content without claiming the user
+  read it based solely on the Git change.
+- **SC-003**: 100% of accomplishment bullets in the acceptance fixture link to a
+  source commit and one or more changed paths; uncertain items are labelled or
+  omitted.
+- **SC-004**: Repeating refresh and restarting produces one report item per
+  repository+commit ID and preserves all four report sections in Markdown.
+- **SC-005**: With local analysis dependencies installed, cached Git activity can
+  be analyzed and existing reports read while offline; the UI shows last verified
+  remote time and never claims an offline fetch succeeded.
+- **SC-006**: A failed fetch, unsupported file, or analysis failure leaves
+  previously saved evidence readable and does not prevent other source items from
+  appearing.
+- **SC-007**: External-edit and interrupted-write acceptance tests lose zero
+  previously saved report content.
+- **SC-008**: In keyboard-only and dark-mode checks, users can refresh, browse a
+  report, inspect its evidence, and understand success, stale, and error states.
+- **SC-009**: A one-line user context note can be added in one input and one save
+  action, remains after restart, and is labelled user-reported in the report.
 
 ## Assumptions
 
-- Dates and timestamps are displayed in the user's local time; a daily journal is
-  associated with the local calendar date when the entry is created.
-- A daily backup runs from a systemd user timer while the user's systemd manager is
-  active, even when the UI is closed. If the manager is stopped, its persistent timer
-  catches up at the next login; scheduling requires an active user manager and linger
-  is disabled by default. Remote or credential failures are reported and retried at
-  the next scheduled run; no resident app daemon is required.
-- A backup destination is not configured by default. Users select their destination
-  and assert it is private before the first automatic push. Commitly cannot verify
-  remote privacy; remote backup is limited to that configured destination.
-- A blocker is unresolved until the user explicitly marks it resolved. Resolving it
-  hides it from unresolved-blocker summaries but does not remove it from journal
-  history.
-- Keyword search covers entry descriptions and optional text fields. The product
-  does not require searching reflection text or archived project names in the MVP.
-- Prior context searches all dates for unresolved entry blockers and entries with
-  next steps, ordered newest first; the dashboard shows at most five of each. Project
-  activity uses the same ordering and limit. Reflection blocker text is descriptive
-  only, has no separate resolved state, and is not blocker status.
-- Search acceptance uses 1,000 seeded entries and checks complete expected matches
-  and source dates; the MVP has no response-time guarantee.
-- Project IDs remain stable through rename and archive. Historical entries show the
-  current project name and an archived label when applicable. Workspace location is
-  read-only in Settings.
-- Conflict recovery copies remain until the resolution saves successfully, then may
-  be deleted. Malformed or unsupported Markdown is left untouched; the user is told
-  to copy and repair it manually.
-- Archived projects remain available for viewing existing history but cannot be
-  assigned to new entries.
-- The MVP is for one individual using a local workspace; collaboration, cloud
-  authentication, real-time synchronization, and the other listed non-goals are out
-  of scope.
-
-## Out of Scope
-
-- AI assistant or AI-generated reflections
-- Kanban boards or complex task management
-- Time tracking
-- Multi-user collaboration
-- Cloud authentication or real-time synchronization
-- Advanced analytics
-- Full Idea Vault
-- Automatic publishing or pushing of journal data to Commitly's public source
-  repository
+- The default report language is Vietnamese; commit subjects and paths remain in
+  their original form.
+- “Daily” grouping uses the user's local calendar date derived from each commit's
+  author timestamp; the source timestamp and offset are retained.
+- A report is a grounded analysis of changed code and documents, not proof of every
+  activity the user performed. Git cannot prove reading, reviewing, or intent.
+- Semantic processing is local-only to satisfy the local-first principle and
+  protect private source code. Local model/runtime and supported document formats
+  must be researched before implementation.
+- A user explicitly refreshes selected repositories. Commitly fetches but never
+  pushes to activity-source remotes.

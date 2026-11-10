@@ -77,17 +77,29 @@ def get_settings(config_path: Path | None = None, workspace: Path | None = None)
     theme = settings.get("theme", "system")
     if theme not in {"system", "light", "dark"}:
         raise ValueError("Theme must be system, light, or dark")
-    return {"workspace_path": str(workspace or default_workspace()), "theme": theme}
+    model_path = settings.get("model_path")
+    executable = settings.get("model_executable", "llama-cli")
+    if model_path is not None and (not isinstance(model_path, str) or not model_path.strip()):
+        raise ValueError("Local model path must be non-empty text or null")
+    if not isinstance(executable, str) or not executable.strip() or "\n" in executable:
+        raise ValueError("Local model executable must be non-empty text")
+    return {"workspace_path": str(workspace or default_workspace()), "theme": theme, "model_path": model_path, "model_executable": executable}
 
 
 def update_settings(patch: dict, config_path: Path | None = None, workspace: Path | None = None) -> dict:
-    if set(patch) - {"theme"}:
-        raise ValueError("Only basic preferences can be changed")
+    if set(patch) - {"theme", "model_path", "model_executable"}:
+        raise ValueError("Only appearance and local analyzer preferences can be changed")
     current = get_settings(config_path, workspace)
     theme = patch.get("theme", current["theme"])
     if theme not in {"system", "light", "dark"}:
         raise ValueError("Theme must be system, light, or dark")
-    _write((config_path or config_dir()) / "settings.json", {"theme": theme})
+    model_path = patch.get("model_path", current["model_path"])
+    executable = patch.get("model_executable", current["model_executable"])
+    if model_path is not None and (not isinstance(model_path, str) or not model_path.strip()):
+        raise ValueError("Local model path must be non-empty text or null")
+    if not isinstance(executable, str) or not executable.strip() or "\n" in executable:
+        raise ValueError("Local model executable must be non-empty text")
+    _write((config_path or config_dir()) / "settings.json", {"theme": theme, "model_path": model_path.strip() if model_path else None, "model_executable": executable.strip()})
     return get_settings(config_path, workspace)
 
 

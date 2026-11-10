@@ -1,195 +1,185 @@
-# Implementation Plan: Commitly — Work Journal First
+# Implementation Plan: Commitly Semantic Daily Work Report
 
 **Branch**: `001-work-journal` | **Date**: 2026-11-10 | **Spec**: [spec.md](spec.md)
 
-**Input**: Feature specification and user-approved stack in the planning request.
-
 ## Summary
 
-Build a Linux-first, local web application for recording completed work in
-human-readable Markdown. A Vite/React/TypeScript/Tailwind frontend talks to one
-loopback-only FastAPI process. Daily journals and project records live in a user
-workspace outside the source checkout; Python performs revision checks and atomic
-file exchange on supported Linux filesystems. A short-lived systemd user service
-makes daily local Git commits
-and pushes only to a user-selected destination confirmed as private. There is no
-database, remote application service, or resident backup daemon.
+Commitly will read pushed commits from explicitly selected repositories, analyze
+their diffs and changed documents on the user's machine, and write one Markdown
+report per date. Each report contains Tóm tắt, Điểm chính, Chi tiết, and a source
+log that ties prose back to repositories, commits, and paths. The app remains
+local-first: no source content is sent to an AI/cloud service and no resident
+analysis or backup daemon is added.
 
 ## Technical Context
 
-**Language/Version**: Python 3.12+; TypeScript with Node.js 22.12+
+**Frontend**: Vite, React, TypeScript, Tailwind CSS.
 
-**Primary Dependencies**: FastAPI, Pydantic, and Uvicorn; Vite, React, and Tailwind
-CSS v4; npm for frontend packages; `react-markdown` for safe rendering of notes;
-`uv` for Python dependencies; Git CLI and systemd user units for backup scheduling.
-Use Vitest and React Testing Library for frontend tests. Use Python standard-library
-JSON, filesystem, hashing, and subprocess facilities for the Markdown store, with a
-small `ctypes` wrapper for Linux `renameat2` exchange operations.
+**Backend**: Python FastAPI, managed with `uv`.
 
-**Storage**: One Markdown file per local calendar date plus a Markdown project
-registry in the default user workspace. Settings and backup status are small JSON
-files in the user's XDG config/state directories. The workspace is outside the
-Commitly source checkout and becomes its own Git repository only when backup is
-enabled. No database.
+**Git access**: Git CLI with bounded subprocess execution.
 
-**Testing**: `pytest` with FastAPI's test client for API, persistence, editing,
-search, conflict, and backup failure coverage; Vitest and React Testing Library for
-frontend interactions, keyboard use, and dark mode. Contract tests compare the
-generated FastAPI OpenAPI document with `contracts/openapi.yaml`.
+**Report storage**: Human-readable Markdown, one dated report file.
 
-**Target Platform**: Linux desktop with systemd user services; Node.js 22.12+ and
-Python 3.12+ for development. The installed application runs locally in the user's
-browser and does not require internet access for journal operations.
+**Analysis**: Local semantic analysis and local document text extraction; exact
+runtime/model is a blocking research decision before implementation.
 
-**Project Type**: Local-first web application with a Python API and static frontend.
+**Platform**: Linux desktop; API and UI bind to loopback.
 
-**Performance Goals**: Keep capture and date browsing local and synchronous from the
-user's perspective. Search correctness is validated against 1,000 seeded entries;
-the MVP makes no response-time promise. Search scans the user's Markdown journal
-directly; do not add an index or database before measurements show a need.
+**Offline**: Browsing reports and analyzing cached Git objects works without
+network after local dependencies/model are installed; fetching newer remote refs
+needs network.
 
-**Constraints**: Bind the API and development server to loopback only. Do not enable
-wildcard CORS or expose the app on a LAN. Core journal operations make no network
-calls. Git pushes require a configured, user-selected destination and explicit
-private confirmation. Do not push to Commitly's public source repository. Preserve
-data on write failures and external-edit conflicts; fail closed if the workspace
-filesystem cannot perform safe atomic exchanges. No AI, task-board, analytics,
-collaboration, cloud-authentication, or real-time-sync features.
+**Testing**: pytest for Git, extraction, analysis boundaries, Markdown persistence,
+conflicts, and APIs; Vitest/React Testing Library for report UI and accessibility.
 
-**Scale/Scope**: One developer and one local workspace. Search and history operate
-over that workspace's Markdown files; multi-user concurrency and hosted service
-scale are out of scope.
+## Architecture and Decisions
 
-## Constitution Check
+### Selected repositories and Git evidence
 
-**Initial gate — PASS**
+- Register only repositories explicitly selected by the user; do not scan the
+  filesystem. Use `origin` by default, otherwise ask the user to select one
+  configured remote.
+- On explicit refresh, attempt `git fetch` without push or merge. Analyze commits
+  reachable from the newest available remote-tracking refs. If fetch fails or the
+  app is offline, use cached refs and display their last successful verification
+  time.
+- Include commits authored by repository-local `user.email`; when it is missing,
+  show a setup error instead of including every contributor.
+- Use canonical Git common-directory identity plus full commit object ID for
+  deduplication. Preserve author timestamps and group by local calendar date.
+- Keep fetch failures isolated per repository. Previously imported evidence for a
+  failed source remains; successful repositories can still update.
 
-- **Work Journal First**: Entry descriptions capture completed work; next steps and
-  blockers remain separately labeled context.
-- **Hybrid Capture**: Description-only entries are the minimal create path; optional
-  details do not block saving.
-- **Local First**: The API, frontend, persistence, search, projects, and reflections
-  run on the local machine. Only an explicitly configured Git push needs network.
-- **Markdown Native**: Markdown files remain the journal and project source of truth.
-- **Data Safety**: Stable IDs, revision checks, same-directory temporary files,
-  atomic exchange, and recoverable conflict copies protect saved content.
-- **Lightweight Architecture**: No database or service dependency is introduced.
-  The user-requested systemd timer runs a one-shot backup job, not a resident daemon.
-- **Incremental Delivery**: The task plan will follow the four prioritized user
-  stories and validate each independently.
-- **Scope Discipline**: Only specified MVP capabilities are included.
-- **Quality and Security**: Automated tests, actionable errors, keyboard access,
-  dark mode, loopback binding, and private-by-confirmation backup are design gates.
+### Local semantic analysis
 
-**Post-design consistency — PASS**: `data-model.md`, API contracts, test layers,
-and `quickstart.md` preserve the same boundaries. No constitution exception is
-required. The separate pre-implementation review gate below must still pass before
-coding starts.
+- Backend prepares bounded evidence from each selected commit: subject, changed
+  paths, numstat, diff hunks, and relevant changed-file context. For changed paper
+  and document files, extract text locally only for supported formats.
+- A local analysis runtime produces the three prose sections in Vietnamese and
+  associates each claim with commit IDs and changed paths. It receives only
+  user-selected repositories' changed content; it does not scan unrelated files.
+- The generated prose is saved with its evidence log in the daily Markdown report.
+  Unsupported files and analysis failures keep the factual log and mark prose
+  analysis unavailable for the affected item.
+- Never send content to a hosted model. Do not add a resident model server. The
+  model/runtime must be chosen after a small feasibility study of Linux hardware,
+  memory, latency, package/model size, license, and Vietnamese/code quality. If no
+  compact local option meets acceptable quality, return with options for user
+  review rather than quietly adding a cloud dependency.
+- The analyzer must not state that a developer read a paper merely because the
+  file was committed. Describe the observed file change and its extracted content.
+  It must avoid claims not anchored in source evidence and label uncertain
+  interpretation.
 
-## Pre-Implementation Review Gate
+### Markdown storage and safe writes
 
-Before Phase 1 or any application code begins, reviewers must review the
-specification, this plan, and `tasks.md`. Resolve open requirements-quality
-findings in the source artifacts, then have the reviewer confirm the checklist
-criteria are satisfied. This review gate precedes all implementation phases; it
-is not a checkpoint after US1.
+- Store `reports/YYYY-MM-DD.md` under the user's XDG data workspace outside the
+  source checkout. Use versioned metadata comments for item IDs, commit IDs, and
+  evidence links; keep report prose readable as Markdown.
+- Allow at most one simple user context line per date. Render it in Điểm chính
+  with clear user attribution; it is not fed to the semantic analyzer as proof of
+  Git activity.
+- Reuse existing safe-write and conflict logic where it fits. Atomic writes and
+  external modification detection protect a complete report; unsupported formats
+  and failed safe writes preserve the original and candidate for recovery.
+- Do not add a database, search index, remote backup, or structured manual-entry
+  subsystem to this baseline. Date-based report browsing is local.
 
-## Architecture and Flow
+### API and UI
 
-1. The React client calls the same-origin `/api/v1` service. In development, Vite
-   proxies API requests to FastAPI; normal use serves the static Vite build from
-   FastAPI.
-2. FastAPI validates requests, uses Pydantic response models, and delegates journal
-   reads/writes to the Markdown store. All mutation requests carry the journal's
-   current revision and full working copy. A stale revision is detected against the
-   exact file displaced by atomic exchange; Commitly restores the current file,
-   preserves both versions as Markdown recovery copies, returns `409 Conflict`, and
-   waits for the user's explicit comparison/selection/merge.
-3. Journal state lives under `$XDG_DATA_HOME/commitly/journal` (falling back to
-   `~/.local/share/commitly/journal`). Preferences use `$XDG_CONFIG_HOME/commitly`;
-   backup run status uses `$XDG_STATE_HOME/commitly`. These paths are outside the
-   source checkout; Settings displays the resolved workspace location.
-4. The timer activates a separate backup command, whether or not the UI is open.
-   The command commits changed journal Markdown locally, then pushes an explicit
-   branch only to the configured private-confirmed remote. Failures leave local
-   commits intact and update backup status for the API to display.
+- The existing same-origin FastAPI app owns Git, local model, document extraction,
+  and filesystem access. Vite/React presents Today report, its one-line context
+  input, report history, and selected repositories.
+- API operations: list/add/remove repositories, refresh a date range, list saved
+  report dates, read a daily report and its evidence, and add/update/remove one
+  context line with revision protection.
+- Refresh returns per-repository fetch and analysis status. Errors are sanitized;
+  credentials from remote URLs are never exposed.
+- Do not include Projects, Reflection, journal Git backup, systemd timers, or
+  structured editing flows from the earlier manual-entry-first scope in baseline
+  navigation.
+
+## Security and Data Safety
+
+- Bind to loopback; validate origin/host for mutations.
+- Use argument arrays, output/time limits, and no shell interpolation for Git.
+- Treat repository content and documents as untrusted input. Bound files and
+  excerpts sent to the local model; never evaluate repository code or execute
+  hooks as part of analysis.
+- Do not include obvious secret values or credential-bearing remote URLs in prose,
+  logs, API errors, or report files. Keep private source data in local storage.
+- A failed fetch or analysis cannot remove previously imported source evidence.
+  A failed report write cannot destroy the saved report.
+- The app may use network only to fetch explicitly selected Git remotes; it never
+  pushes activity or report data.
 
 ## Delivery Phases
 
-1. **Setup**: Establish the frontend/backend project layout, lockfiles, test
-   commands, local configuration paths, and loopback-only application startup.
-2. **Foundation**: Implement the Markdown schema/parser, atomic persistence,
-   revision-aware conflict preservation, shared API models, and baseline tests.
-3. **US1 — Capture and Continue Work (P1)**: Description-only capture, entry types
-   and optional details, editing/deletion, timeline, keyboard save, restart
-   persistence, and external-edit conflict resolution.
-4. **US2 — Review Today and Prior Context (P2)**: Local date dashboard, prior
-   context, and optional editable daily reflections.
-5. **US3 — Find Work and Manage Projects (P3)**: Date history, search and filters,
-   project lifecycle/activity, and resolved-blocker summaries.
-6. **US4 — Back Up and Configure the Journal (P4)**: Settings, destination
-   confirmation, user timer/service, status reporting, daily local commit, remote
-   push, and offline/authentication failure handling.
-7. **Polish**: Cross-story keyboard/accessibility review, dark mode, error/empty
-   states, and acceptance validation against the spec.
+1. **Review gate**: Approve the new three-section semantic report scope and all
+   linked design artifacts before modifying application code.
+2. **Research spike (blocking)**: Evaluate local model/runtime and document text
+   extraction against a small representative fixture of code and papers. Confirm
+   quality, privacy, resource requirements, supported formats, and installation.
+   If it cannot meet the local/offline constraints, return with a concrete
+   constraint/options report before implementation.
+3. **Foundation**: Define versioned report/evidence schema, selected repository
+   configuration, local Git boundary, safe Markdown writes, and deterministic tests
+   around model I/O using a stubbed analyzer.
+4. **P1 — Generate reports**: Fetch/cached-ref discovery, diff and document
+   extraction, local semantic analysis, evidence linkage, report rendering, and
+   Today UI.
+5. **P2 — Browse evidence**: Date history, report browsing, and source-log
+   inspection; retain offline access. Search and rich manual editing are later scope.
+6. **Acceptance**: Validate known code/document fixtures, unsupported file and
+   fetch failures, offline generation, restart persistence, conflict safety, and
+   keyboard/dark-mode behavior. Record only executed results.
 
 ## Project Structure
 
-### Documentation
+Reuse the existing `backend/` and `frontend/` layout. Candidate modules after the
+research decision:
 
 ```text
-specs/001-work-journal/
-├── plan.md
-├── research.md
-├── data-model.md
-├── quickstart.md
-└── contracts/
-    └── openapi.yaml
+backend/src/commitly/
+├── git_activity.py       # selected repo validation, fetch, commit/diff evidence
+├── document_text.py      # bounded local text extraction for supported formats
+├── report_analysis.py    # local analyzer call and evidence-grounded output
+├── reports.py            # Markdown report schema and safe persistence
+└── api/                  # repository, refresh, and report contracts/routes
+frontend/src/features/
+├── today/                # narrative report and refresh status
+├── journal/              # prior report browsing/search
+└── repositories/         # explicit source selection
 ```
 
-### Source Code
+Exact module/runtime choices may change after the research spike, but no code work
+starts before the review gate.
 
-```text
-backend/
-├── pyproject.toml
-├── uv.lock
-├── src/commitly/
-│   ├── app.py                 # FastAPI app and static frontend mount
-│   ├── api/
-│   │   ├── routes.py          # /api/v1 routes
-│   │   └── schemas.py         # Request/response models
-│   ├── journal.py             # Markdown parser, renderer, revisions, atomic writes
-│   ├── projects.py            # Project registry operations
-│   ├── search.py              # Local Markdown search and filters
-│   ├── backup.py              # Git backup command and status
-│   └── config.py              # XDG paths and preferences
-└── tests/
-    ├── unit/
-    ├── integration/
-    └── contract/
+## Constitution Check
 
-frontend/
-├── package.json
-├── package-lock.json
-├── vite.config.ts
-└── src/
-    ├── app/
-    ├── features/
-    │   ├── today/
-    │   ├── capture/
-    │   ├── journal/
-    │   ├── projects/
-    │   └── settings/
-    ├── shared/
-    └── test/
+- **Work Journal First**: Report prose describes evidenced completed work.
+- **Hybrid Capture**: Git is the automatic source; one short optional context line
+  supplements activity Git cannot prove.
+- **Local First / Markdown Native**: Analysis and reports stay local; the source
+  of truth is readable Markdown; fetch is an explicit optional network update.
+- **Data Safety**: Stable commit/report IDs, atomic writes, and external-edit
+  protection are required.
+- **Lightweight Architecture**: No database, remote AI service, resident analyzer,
+  scheduled process, or feature outside report generation and review.
+- **Incremental Delivery**: Research spike and P1 generation are separate gates;
+  browsing follows independently.
+- **Scope Discipline**: Local semantic analysis is included because the user
+  explicitly requested prose explanations of code and document changes. AI
+  reflections and cloud analysis remain out of scope.
+- **Quality**: Use tests with known evidence fixtures, safe failure handling, and
+  accessible report UI.
 
-systemd/
-├── commitly-backup.service
-└── commitly-backup.timer
-```
+## Pre-Implementation Review Gate
 
-**Structure Decision**: Keep one frontend and one Python backend in the same
-repository. The backend owns all file and Git access; the frontend receives only
-validated API data. The systemd units invoke the backend's one-shot backup entry
-point. The personal workspace is a separate path and Git repository, never the
-application checkout.
+Before any application code changes, the user must review and approve `spec.md`,
+`plan.md`, `tasks.md`, `data-model.md`, `contracts/openapi.yaml`, `research.md`,
+and `quickstart.md`. The current implementation reflects an earlier scope and is
+not evidence that semantic reports already work. The local model/runtime research
+spike is the first implementation-phase task after approval; it does not authorize
+cloud processing.
