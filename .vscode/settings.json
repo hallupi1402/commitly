@@ -1,0 +1,4 @@
+{
+  "git.decorations.enabled": true,
+  "scm.diffDecorations": "all"
+}

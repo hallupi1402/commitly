@@ -1,0 +1,589 @@
+openapi: 3.1.0
+info:
+  title: Commitly Local API
+  version: 1.0.0
+  description: Same-origin API for the local Commitly work journal.
+servers:
+  - url: /api/v1
+    description: Served by the loopback-only Commitly application.
+tags:
+  - name: Journal
+  - name: Projects
+  - name: Backup
+  - name: Settings
+paths:
+  /today:
+    get:
+      tags: [Journal]
+      summary: Read today's journal and dated prior context
+      responses:
+        '200':
+          description: Current local date, today's journal, and prior next steps/blockers.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TodayResponse'
+  /journals/{date}:
+    parameters:
+      - $ref: '#/components/parameters/Date'
+    get:
+      tags: [Journal]
+      summary: Read a daily journal
+      description: Returns an empty journal and revision when no file exists yet.
+      responses:
+        '200':
+          description: Journal and current revision.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyJournal'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    put:
+      tags: [Journal]
+      summary: Save a complete daily journal snapshot
+      description: |
+        The client sends the complete working copy, including entries and optional
+        reflection. The client generates IDs and UTC creation timestamps
+        automatically for new entries. Existing IDs and creation timestamps are
+        immutable. If-Match
+        must contain the revision from the last read. A stale revision returns both
+        the client working copy and current external version as a preserved conflict.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DailyJournal'
+      responses:
+        '200':
+          description: Saved journal and new revision.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyJournal'
+        '409':
+          $ref: '#/components/responses/JournalConflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /journals/{date}/conflicts/{conflict_id}:
+    parameters:
+      - $ref: '#/components/parameters/Date'
+      - name: conflict_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [Journal]
+      summary: Read both preserved versions of a journal conflict
+      responses:
+        '200':
+          description: External journal and client working copy.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalConflict'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /journals/{date}/conflicts/{conflict_id}/resolve:
+    parameters:
+      - $ref: '#/components/parameters/Date'
+      - name: conflict_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags: [Journal]
+      summary: Save the user's selected or combined conflict resolution
+      description: Requires the revision of the current external journal. A newer external edit creates another conflict.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DailyJournal'
+      responses:
+        '200':
+          description: Resolved journal and new revision.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyJournal'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/JournalConflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /entries/search:
+    get:
+      tags: [Journal]
+      summary: Search and filter entries
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: project_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: type
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/EntryType'
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Matching entries with their journal dates.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SearchResult'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /projects:
+    get:
+      tags: [Projects]
+      summary: Read active and archived projects
+      description: Returns an empty list and revision when the registry has not been created.
+      responses:
+        '200':
+          description: Complete project registry and revision.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Project'
+    put:
+      tags: [Projects]
+      summary: Save the complete project registry
+      description: The client sends a full working copy with IDs and creation timestamps automatically assigned to new projects; archived projects remain in the registry.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/Project'
+      responses:
+        '200':
+          description: Saved project registry and new revision.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Project'
+        '409':
+          $ref: '#/components/responses/DocumentConflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /projects/{project_id}/activity:
+    parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [Projects]
+      summary: Read project history, latest next steps, and unresolved blockers
+      responses:
+        '200':
+          description: Project activity summary.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectActivity'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /backup/status:
+    get:
+      tags: [Backup]
+      summary: Read backup configuration and last run status
+      responses:
+        '200':
+          description: Backup status without credentials.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupStatus'
+  /backup/configuration:
+    put:
+      tags: [Backup]
+      summary: Configure or disable a private backup destination
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BackupConfigurationInput'
+      responses:
+        '200':
+          description: Sanitized backup configuration and status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupStatus'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /settings:
+    get:
+      tags: [Settings]
+      summary: Read local workspace and preferences
+      responses:
+        '200':
+          description: Current settings.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Settings'
+    patch:
+      tags: [Settings]
+      summary: Update basic preferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettingsPatch'
+      responses:
+        '200':
+          description: Updated settings.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Settings'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+components:
+  parameters:
+    Date:
+      name: date
+      in: path
+      required: true
+      schema:
+        type: string
+        format: date
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: ETag returned by the last read of the edited Markdown document.
+      schema:
+        type: string
+  headers:
+    ETag:
+      description: Quoted SHA-256 revision of the saved Markdown document.
+      schema:
+        type: string
+  responses:
+    NotFound:
+      description: The requested conflict or project does not exist.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ValidationError:
+      description: Invalid request, date, or unsupported Markdown schema.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    JournalConflict:
+      description: The daily journal changed since the client read it; both versions are preserved.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/JournalConflict'
+    DocumentConflict:
+      description: The project registry changed since the client read it; both versions are preserved.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/DocumentConflict'
+  schemas:
+    EntryType:
+      type: string
+      enum: [work, note, blocker]
+    JournalEntry:
+      type: object
+      required: [id, created_at, date, type, description]
+      properties:
+        id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+          description: Immutable UTC timestamp created when the entry is first saved.
+        date:
+          type: string
+          format: date
+        type:
+          $ref: '#/components/schemas/EntryType'
+          default: work
+        description:
+          type: string
+          minLength: 1
+          description: Must contain a non-whitespace character.
+        project_id:
+          type: [string, 'null']
+          format: uuid
+        tags:
+          type: array
+          items:
+            type: string
+        result:
+          type: [string, 'null']
+        blocker:
+          type: [string, 'null']
+        blocker_resolved_at:
+          type: [string, 'null']
+          format: date-time
+        next_step:
+          type: [string, 'null']
+        references:
+          type: array
+          items:
+            type: string
+        notes:
+          type: [string, 'null']
+    DailyReflection:
+      type: object
+      properties:
+        accomplishments:
+          type: [string, 'null']
+        blockers:
+          type: [string, 'null']
+        next_steps:
+          type: [string, 'null']
+    DailyJournal:
+      type: object
+      required: [date, entries]
+      properties:
+        date:
+          type: string
+          format: date
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/JournalEntry'
+        reflection:
+          oneOf:
+            - $ref: '#/components/schemas/DailyReflection'
+            - type: 'null'
+    SearchResult:
+      type: object
+      required: [date, entry]
+      properties:
+        date:
+          type: string
+          format: date
+        entry:
+          $ref: '#/components/schemas/JournalEntry'
+    PreviousContext:
+      type: object
+      required: [source_date, next_steps, blockers]
+      properties:
+        source_date:
+          type: string
+          format: date
+        next_steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/JournalEntry'
+        blockers:
+          type: array
+          items:
+            $ref: '#/components/schemas/JournalEntry'
+    TodayResponse:
+      type: object
+      required: [date, journal, previous_context]
+      properties:
+        date:
+          type: string
+          format: date
+        journal:
+          $ref: '#/components/schemas/DailyJournal'
+        previous_context:
+          type: array
+          items:
+            $ref: '#/components/schemas/PreviousContext'
+    JournalConflict:
+      type: object
+      required: [conflict_id, date, expected_revision, current_revision, local, external]
+      properties:
+        conflict_id:
+          type: string
+          format: uuid
+        date:
+          type: string
+          format: date
+        expected_revision:
+          type: string
+        current_revision:
+          type: string
+        local:
+          $ref: '#/components/schemas/DailyJournal'
+        external:
+          $ref: '#/components/schemas/DailyJournal'
+    DocumentConflict:
+      type: object
+      required: [expected_revision, current_revision, local, external]
+      properties:
+        expected_revision:
+          type: string
+        current_revision:
+          type: string
+        local:
+          type: array
+          items:
+            $ref: '#/components/schemas/Project'
+        external:
+          type: array
+          items:
+            $ref: '#/components/schemas/Project'
+    Project:
+      type: object
+      required: [id, name, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+        created_at:
+          type: string
+          format: date-time
+        archived_at:
+          type: [string, 'null']
+          format: date-time
+    ProjectActivity:
+      type: object
+      required: [project, entries, latest_next_steps, unresolved_blockers]
+      properties:
+        project:
+          $ref: '#/components/schemas/Project'
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/SearchResult'
+        latest_next_steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/SearchResult'
+        unresolved_blockers:
+          type: array
+          items:
+            $ref: '#/components/schemas/SearchResult'
+    BackupConfigurationInput:
+      type: object
+      required: [enabled, private_confirmed]
+      properties:
+        enabled:
+          type: boolean
+        remote_url:
+          type: [string, 'null']
+        branch:
+          type: string
+          default: main
+        private_confirmed:
+          type: boolean
+          description: Must be true before any remote push is enabled.
+    BackupStatus:
+      type: object
+      required: [enabled, configured, private_confirmed, pending_commits]
+      properties:
+        enabled:
+          type: boolean
+        configured:
+          type: boolean
+        destination_label:
+          type: [string, 'null']
+        private_confirmed:
+          type: boolean
+        last_attempt_at:
+          type: [string, 'null']
+          format: date-time
+        last_success_at:
+          type: [string, 'null']
+          format: date-time
+        pending_commits:
+          type: integer
+          minimum: 0
+        last_error:
+          type: [string, 'null']
+    Settings:
+      type: object
+      required: [workspace_path, theme]
+      properties:
+        workspace_path:
+          type: string
+        theme:
+          type: string
+          enum: [system, light, dark]
+    SettingsPatch:
+      type: object
+      properties:
+        theme:
+          type: string
+          enum: [system, light, dark]
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
