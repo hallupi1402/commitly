@@ -1,10 +1,7 @@
 # Commitly MVP Quickstart and Validation
 
-This guide describes how the planned application will be built and validated. It
-does not install or run application code; implementation starts only after the
-specification, this plan, and the generated task list have been reviewed and the
-pre-implementation review gate in `tasks.md` has passed. Do not defer that review
-until after the MVP story has been implemented.
+This guide describes how to install, run, and validate the Commitly MVP. Journal
+features work locally without network access after dependencies are installed.
 
 ## Prerequisites
 
@@ -25,6 +22,20 @@ npm ci --prefix frontend
 Dependency installation may use the network. Once installed, all journal
 development and runtime checks below are local; network access is only needed to
 test an explicitly configured Git remote.
+
+To install the one-shot backup command and user timer after dependency setup:
+
+```sh
+uv tool install --editable ./backend
+install -Dm644 systemd/commitly-backup.service ~/.config/systemd/user/commitly-backup.service
+install -Dm644 systemd/commitly-backup.timer ~/.config/systemd/user/commitly-backup.timer
+systemctl --user daemon-reload
+systemctl --user enable --now commitly-backup.timer
+```
+
+The timer runs while the user manager is active, including with the UI closed.
+`Persistent=true` catches up after the next login if the manager was stopped.
+Linger remains disabled by default, and no credentials are placed in unit files.
 
 ## Run in Development
 
@@ -67,26 +78,35 @@ and dark mode.
 2. **Keyboard and offline**: Save with Ctrl+Enter and Cmd+Enter on their respective
    platforms. Disable network access and create, browse, search, edit, and delete
    entries; all local operations must still complete.
-3. **External Markdown conflict**: Open a daily Markdown file in a text editor and
-   change it after the app loaded the same journal. Attempt an app edit. Confirm the
-   API reports a conflict, preserves both versions, and the UI offers compare, choose,
-   or combine before explicit save.
-4. **Search and projects**: Seed entries across dates, entry types, and projects.
-   Search by keyword, filter by project/type, open a past date, and confirm archived
-   project history and unresolved blocker summaries are retained.
+3. **External file safety**: Edit a loaded daily journal and project registry outside
+   the app, then attempt app saves. Confirm both conflicts preserve both versions and
+   allow explicit resolution. Edit the journal again during resolution and confirm a
+   new conflict preserves that edit. Confirm recovery copies are removed only after a
+   successful resolution. Try malformed/unsupported Markdown; verify it stays intact
+   and the error tells the user to copy and repair it manually.
+4. **Search and projects**: Seed 1,000 entries across dates, entry types, and projects.
+   Search and filter; verify every expected result and source date. Confirm Today shows
+   up to five newest next steps and unresolved entry blockers across all dates, and
+   project activity uses the same ordering. Rename and archive a project; verify old
+   entries show its current name and archived label.
 5. **Git backup success**: Use a disposable local bare Git repository configured as
-   the private test destination. Confirm privacy in Settings, create journal changes,
+   the test destination. In Settings, check “I confirm that this Git destination is
+   private and appropriate for storing my personal journal.” This is a user assertion;
+   Commitly does not verify remote privacy. Create journal changes,
    run the backup job, and confirm a local commit and remote push. Run it again
    without changes and confirm no empty commit appears.
 6. **Git backup failure**: After making a local backup commit, make the remote
-   unavailable or reject a push. Confirm the commit remains locally, status exposes
-   a useful error and pending commit count, and a later successful run pushes the
-   retained commit without reset, cleanup, or force push.
+   unavailable or reject authentication. Confirm the commit remains locally, status
+   exposes a sanitized error and pending count, and the next scheduled run pushes the
+   retained commit without reset, cleanup, or force push. Confirm credentials are
+   read from the Git credential helper and never stored in settings/service variables
+   or logged.
 7. **Scheduled backup**: Install the user timer and one-shot service, inspect the
    next run with `systemctl --user list-timers`, and confirm the timer catches up
    after a missed activation when the user manager next starts. Linger remains
    disabled by default.
-8. **Private paths and binding**: Confirm the default journal workspace is under the
-   user's data directory and outside the source checkout; Settings displays the
-   resolved workspace path. Confirm the app and development server bind only to
-   loopback.
+8. **Private paths and accessibility**: Confirm the default journal workspace is
+   under the user's data directory and outside the source checkout; Settings displays
+   its read-only path. Confirm primary workflows have visible keyboard focus, named
+   semantic controls, and announced save/error status. Confirm the app and development
+   server bind only to loopback.

@@ -18,7 +18,7 @@ paths:
       summary: Read today's journal and dated prior context
       responses:
         '200':
-          description: Current local date, today's journal, and prior next steps/blockers.
+          description: Current local date, today's journal, and up to five newest prior next steps and unresolved entry blockers across all dates.
           content:
             application/json:
               schema:
@@ -107,7 +107,7 @@ paths:
     post:
       tags: [Journal]
       summary: Save the user's selected or combined conflict resolution
-      description: Requires the revision of the current external journal. A newer external edit creates another conflict.
+      description: Requires the revision of the current external journal. A newer external edit creates another conflict and preserves both the new external version and submitted draft.
       parameters:
         - $ref: '#/components/parameters/IfMatch'
       requestBody:
@@ -219,6 +219,66 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Project'
+        '409':
+          $ref: '#/components/responses/DocumentConflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /projects/conflicts/{conflict_id}:
+    parameters:
+      - name: conflict_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [Projects]
+      summary: Read both preserved versions of a project registry conflict
+      responses:
+        '200':
+          description: Local project draft and current external registry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentConflict'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /projects/conflicts/{conflict_id}/resolve:
+    parameters:
+      - name: conflict_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags: [Projects]
+      summary: Save the user's selected or combined project registry resolution
+      description: Requires the current external registry revision. A newer external edit creates another conflict.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/Project'
+      responses:
+        '200':
+          description: Resolved project registry and new revision.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Project'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/DocumentConflict'
         '422':
@@ -387,6 +447,7 @@ components:
         blocker_resolved_at:
           type: [string, 'null']
           format: date-time
+          description: Null means unresolved; set when the user marks this entry's blocker resolved.
         next_step:
           type: [string, 'null']
         references:
@@ -402,6 +463,7 @@ components:
           type: [string, 'null']
         blockers:
           type: [string, 'null']
+          description: Descriptive reflection text; it has no separate resolved state.
         next_steps:
           type: [string, 'null']
     DailyJournal:
@@ -437,10 +499,14 @@ components:
           format: date
         next_steps:
           type: array
+          maxItems: 5
+          description: Newest first; selected across all prior dates.
           items:
             $ref: '#/components/schemas/JournalEntry'
         blockers:
           type: array
+          maxItems: 5
+          description: Unresolved entry blockers, newest first; reflection text is excluded.
           items:
             $ref: '#/components/schemas/JournalEntry'
     TodayResponse:
@@ -454,6 +520,7 @@ components:
           $ref: '#/components/schemas/DailyJournal'
         previous_context:
           type: array
+          description: Groups the global five newest next steps and five newest unresolved entry blockers by source date.
           items:
             $ref: '#/components/schemas/PreviousContext'
     JournalConflict:
@@ -476,8 +543,12 @@ components:
           $ref: '#/components/schemas/DailyJournal'
     DocumentConflict:
       type: object
-      required: [expected_revision, current_revision, local, external]
+      required: [conflict_id, expected_revision, current_revision, local, external]
+      description: Both registry versions are preserved as Markdown until the resolution saves successfully; newer external edits produce a new conflict.
       properties:
+        conflict_id:
+          type: string
+          format: uuid
         expected_revision:
           type: string
         current_revision:
@@ -500,12 +571,14 @@ components:
         name:
           type: string
           minLength: 1
+          description: Unique case-insensitively among active projects. Renaming preserves the ID and changes the name displayed for historical entries.
         created_at:
           type: string
           format: date-time
         archived_at:
           type: [string, 'null']
           format: date-time
+          description: Non-null means archived; historical entries show the archived project label.
     ProjectActivity:
       type: object
       required: [project, entries, latest_next_steps, unresolved_blockers]
@@ -518,10 +591,14 @@ components:
             $ref: '#/components/schemas/SearchResult'
         latest_next_steps:
           type: array
+          maxItems: 5
+          description: Entries with next steps, newest first.
           items:
             $ref: '#/components/schemas/SearchResult'
         unresolved_blockers:
           type: array
+          maxItems: 5
+          description: Unresolved entry blockers, newest first; reflection text is excluded.
           items:
             $ref: '#/components/schemas/SearchResult'
     BackupConfigurationInput:
@@ -537,7 +614,7 @@ components:
           default: main
         private_confirmed:
           type: boolean
-          description: Must be true before any remote push is enabled.
+          description: Must be true before any remote push is enabled. The user asserts the destination is private and suitable for personal journal data; Commitly does not verify remote privacy.
     BackupStatus:
       type: object
       required: [enabled, configured, private_confirmed, pending_commits]
@@ -550,6 +627,9 @@ components:
           type: [string, 'null']
         private_confirmed:
           type: boolean
+        branch:
+          type: string
+          default: main
         last_attempt_at:
           type: [string, 'null']
           format: date-time
@@ -567,6 +647,8 @@ components:
       properties:
         workspace_path:
           type: string
+          readOnly: true
+          description: Resolved local journal workspace path; changing it is outside the MVP.
         theme:
           type: string
           enum: [system, light, dark]

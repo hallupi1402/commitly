@@ -15,6 +15,11 @@
 
 ## Markdown Schema Version 1
 
+Version 1 is the only supported version for both daily journals and `projects.md`.
+Unknown future versions are unsupported: preserve the original, show an actionable
+error, and require the user to copy and manually migrate the file. Never rewrite it
+automatically.
+
 The parser accepts UTF-8 Markdown with a journal header, delimited entry blocks,
 optional reflection sections, and a trailing schema version. Metadata comments use
 JSON so the parser can use Python's standard library; user content remains ordinary
@@ -66,10 +71,21 @@ Rules:
 - Entry blocks are ordered by creation timestamp, then UUID for a stable tie-break.
   Missing, duplicate, malformed, or unsupported metadata is a read error; the
   application does not silently rewrite the file or generate replacement IDs.
+  The error identifies the file and asks the user to copy and repair it manually;
+  no save is allowed until it parses successfully.
 - Reflection is optional and belongs to one local journal date. Its three fields are
   independently optional Markdown sections.
 - An archived project's name and ID remain available to render existing entries.
-  New entries cannot select archived projects.
+  New entries cannot select archived projects. Renames preserve the project ID, so
+  older entries display the current name; archived projects also display an archived
+  label. Active names are unique case-insensitively.
+- Prior context scans all dates and includes entries with a next step and unresolved
+  entry blockers, newest first by local date, creation timestamp, then ID. The Today
+  dashboard shows at most five of each kind across all dates; there is no date cutoff.
+  Project activity uses the same ordering and limit. A blocker is an entry of type
+  `blocker` or with non-empty `blocker` content, unresolved until
+  `blocker_resolved_at` is set. Reflection blocker text is descriptive only, has no
+  separate resolved state, and does not count in blocker summaries.
 
 ## Entities
 
@@ -132,8 +148,13 @@ A conflict contains the expected revision, current external Markdown, submitted
 local draft, and a generated conflict ID. Before returning `409`, the backend saves
 both versions as Markdown under `.commitly/conflicts/YYYY-MM-DD/<conflict-id>/`.
 The client may compare, choose, or combine content; the backend writes the chosen
-resolution only when the current external revision still matches. Recovery copies
-remain until the resolution succeeds.
+resolution only when the current external revision still matches. A newer external
+edit creates another conflict and preserves the new external file and submitted
+draft. Recovery copies remain until the resolution saves successfully and may be
+deleted afterward. The project registry uses the same compare-and-resolve behavior, with both
+versions stored as Markdown under `.commitly/conflicts/projects/<conflict-id>/` before
+the conflict is shown; its recovery copies may also be deleted only after a
+successful resolution save.
 
 ### Backup Configuration and Status
 

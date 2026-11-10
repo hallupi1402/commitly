@@ -48,6 +48,9 @@ reopen Commitly, and confirm the entry and its timestamp are still present.
    **When** the conflict is detected, **Then** both versions are shown, neither is
    saved over automatically, and both remain recoverable while the user compares,
    combines, or chooses a version and explicitly saves the resolution.
+8. **Given** the journal changes again while the user is resolving a conflict,
+   **When** the user submits against the older external revision, **Then** Commitly
+   preserves the newer external version and draft and presents a new conflict.
 
 ---
 
@@ -69,7 +72,8 @@ blockers are available; add and edit a reflection without making it mandatory.
    displays the current local date and today's entries in timestamp order.
 2. **Given** prior journals contain entries, **When** the user opens today's
    dashboard, **Then** the dashboard shows prior next steps and blockers with their
-   source dates.
+   source dates, newest first, showing up to five of each kind. It searches all
+   prior dates so older unresolved blockers are not hidden by a date cutoff.
 3. **Given** the user wants to reflect, **When** they enter accomplishments,
    blockers, or next steps, **Then** the reflection is saved for that date and can
    be edited later.
@@ -109,11 +113,16 @@ project's activity and current next steps/blockers.
    associated entries.
 5. **Given** a project has recorded next steps or blockers, **When** the user opens
    its activity history, **Then** the latest next steps and unresolved blockers are
-   shown with their source entries and dates.
+   shown with their source entries and dates, newest first and limited to five of
+   each kind. Only unresolved entry blockers count; reflection text is not a project
+   blocker.
 6. **Given** a blocker is no longer active, **When** the user marks it resolved,
    **Then** it is no longer listed as an unresolved blocker and remains in history.
 7. **Given** the user creates an entry without choosing a project, **When** it is
    saved, **Then** it remains available as an unassigned entry.
+8. **Given** a project is renamed or archived, **When** the user opens an older
+   associated entry, **Then** its stable project ID still links it to the project and
+   the current project name is shown, with an archived label when applicable.
 
 ---
 
@@ -145,13 +154,20 @@ and confirm pending commits remain available for a later retry.
    journal data anywhere.
 5. **Given** a backup destination is configured but not confirmed as private,
    **When** a scheduled backup runs, **Then** Commitly does not push journal data and
-   asks the user to confirm the destination before the first push.
+   asks the user to check: “I confirm that this Git destination is private and
+   appropriate for storing my personal journal.” This is the user's assertion;
+   Commitly does not verify the remote's privacy.
 6. **Given** a destination is configured, **When** Commitly backs up journal data,
    **Then** it uses only the user-configured destination and never pushes to
    Commitly's public source repository.
 7. **Given** the user opens Settings, **When** they review configuration, **Then**
    the local workspace location, basic preferences, and backup destination and status
-   are displayed.
+   are displayed. The workspace location is read-only in the MVP.
+8. **Given** the systemd user manager is active, **When** the daily timer fires while
+   the UI is closed, **Then** the one-shot backup runs. If the manager was stopped,
+   the persistent timer catches up at the next user login. Authentication or remote
+   failures retain local commits, show a sanitized error, and are retried by the next
+   scheduled run.
 
 ### Edge Cases
 
@@ -160,14 +176,22 @@ and confirm pending commits remain available for a later retry.
 - A save fails because the journal file changed outside Commitly: Commitly shows the
   user's unsaved changes and the external changes for comparison, preserves both
   originals, and requires an explicit choice or combined resolution before saving.
+- If a daily journal or project registry contains malformed or unsupported metadata,
+  Commitly leaves the original untouched, explains the path and problem, and tells
+  the user to make a copy and repair it manually before retrying.
+- A project registry changed outside Commitly follows the same compare-and-resolve
+  protection as a journal. A newer edit during resolution creates another conflict
+  and preserves the new external file and local draft.
 - A write is interrupted: the previously saved journal remains readable and intact.
 - Two entries have the same timestamp: both remain distinct by stable ID and appear
   in a consistent order.
 - An entry refers to an archived project: its historical association remains visible,
   but the archived project is not offered for new entries.
-- A daily backup is due while Commitly is closed or its destination is unavailable:
-  it is deferred until Commitly next runs or the destination is available; existing
-  local commits are retained.
+- A daily backup is due while the systemd user manager is stopped: the persistent
+  timer runs it after the manager next starts at user login. If the remote or
+  credentials are unavailable, the failed run is reported and the next scheduled
+  run retries; local commits remain intact. The manager must be active for scheduling
+  and linger stays disabled by default.
 - The user has no entries, no search matches, or no project activity: the relevant
   screen provides a clear empty state and an appropriate next action.
 - The user uses only a keyboard or enables dark mode: all primary workflows remain
@@ -194,36 +218,63 @@ and confirm pending commits remain available for a later retry.
   journals, search entries by keyword, and filter entries by project and type.
 - **FR-007**: Users MUST be able to create, rename, and archive projects, associate
   entries with projects, and leave entries unassigned. Archiving a project MUST NOT
-  delete its entries.
+  delete its entries. Project IDs MUST remain stable; older entries MUST display the
+  current project name and an archived label when applicable. Names MUST be unique
+  among active projects, case-insensitively.
 - **FR-008**: Project activity MUST show associated history, latest next steps, and
   unresolved blockers. Users MUST be able to mark a blocker resolved; resolution
-  MUST preserve the blocker in history.
+  MUST preserve the blocker in history. Latest next steps and unresolved blockers
+  MUST be ordered newest first and limited to five each. A blocker is unresolved
+  when an entry is type Blocker or has blocker content and its resolution timestamp
+  is null.
+  Reflection text is descriptive only and is not included in blocker status.
 - **FR-009**: Users MUST be able to record and edit daily reflection fields for
   accomplishments, blockers, and next steps. A reflection MUST NOT be required to
   complete or leave a day.
-- **FR-010**: Daily journals MUST be saved as human-readable Markdown files and
-  preserve entry IDs, timestamps, and optional details across application restarts.
+- **FR-010**: Daily journals and the project registry MUST be saved as
+  human-readable Markdown and preserve IDs, timestamps, and optional details across
+  application restarts. Schema version 1 is the only supported version. Malformed,
+  missing, duplicate, or unsupported metadata MUST leave the original file unchanged
+  and show an actionable error with the file path; the user must copy and repair the
+  file before saving.
 - **FR-011**: Capture, browse, search, edit, delete, project, and reflection
   operations MUST work without network access.
-- **FR-012**: To prevent unintended overwrites, before saving over a journal changed
-  outside Commitly, the product MUST detect the conflict and show both versions
-  without saving either over the other. Both originals MUST remain recoverable until
+- **FR-012**: To prevent unintended overwrites, before saving over a journal or
+  project registry changed outside Commitly, the product MUST detect the conflict
+  and show both versions without saving either over the other. Both originals MUST
+  remain recoverable until
   the user compares, combines, or explicitly chooses a version and saves the
-  resolution. Interrupted or failed writes MUST NOT damage the last saved journal.
+  resolution. A newer external edit during resolution MUST create another conflict
+  without replacing either version. Recovery copies MUST be retained until the
+  resolved save succeeds and MAY be removed only afterward. Malformed or unsupported
+  files and filesystems that cannot perform safe atomic writes MUST be left untouched;
+  the user's draft MUST remain recoverable
+  and Commitly MUST show an actionable recovery error.
 - **FR-013**: Commitly MUST support a scheduled daily Git backup of journal changes,
   MUST automatically push commits to the configured and privacy-confirmed
   destination, MUST skip empty commits, and MUST retain local unpushed commits after
-  backup or sync failures.
+  backup or sync failures. A systemd user timer MUST run while the user manager is
+  active, including when the UI is closed, and catch up after the manager starts at
+  the next login. The manager MUST be active for scheduling; linger MUST remain
+  disabled by default. Failed remote/authentication runs MUST show a sanitized error
+  and retry on the next scheduled run. Git credentials MUST come from the user's
+  configured credential helper and MUST NOT be stored in settings or systemd unit
+  variables or written to logs.
 - **FR-014**: Users MUST be able to configure a backup destination and view backup
   and sync status and errors. With no destination configured or before the user
   confirms the destination is private, Commitly MUST NOT push journal data. It MUST
   never automatically push journal data to Commitly's public source repository.
-  Destinations MUST be user-selected and private by default.
-- **FR-015**: Settings MUST display the local workspace location and allow users to
-  configure basic preferences, including dark mode.
+  Destinations MUST be user-selected and MUST NOT be configured by default. Before
+  enabling a push, the user MUST affirm: “I confirm that this Git destination is
+  private and appropriate for storing my personal journal.” This is a user
+  assertion; Commitly does not verify remote privacy.
+- **FR-015**: Settings MUST display the local workspace location as read-only and
+  allow users to configure basic preferences, including dark mode.
 - **FR-016**: Empty states and errors MUST explain the current state and a useful next
   action. All primary workflows MUST be operable by keyboard and the interface MUST
-  support dark mode.
+  support dark mode. Interactive controls MUST have accessible names and semantic
+  roles, keyboard focus MUST remain visible, and save/error status MUST be announced
+  to assistive technology.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -246,18 +297,20 @@ and confirm pending commits remain available for a later retry.
 ### Measurable Outcomes
 
 - **SC-001**: In usability acceptance checks, a user can save a one-line Work entry
-  from the Today Dashboard in no more than two actions after opening it.
+  from the already-open Today Dashboard in two deliberate actions: enter the
+  description as one text-entry action, then activate Save as the second action.
 - **SC-002**: 100% of saved entries in the persistence acceptance suite retain their
   IDs, timestamps, and content after closing and reopening the application.
 - **SC-003**: All core journal operations in the acceptance suite complete with
   network access disabled.
 - **SC-004**: In external-change and interrupted-write acceptance scenarios, zero
   previously saved or externally changed journal content is silently lost.
-- **SC-005**: Users can find a seeded matching entry through keyword search and
-  project/type filtering, and open a prior daily journal, without opening unrelated
-  journal files manually.
+- **SC-005**: In a seeded dataset of 1,000 entries, users can find every expected
+  keyword match with its source date and apply project/type filters; they can also
+  open a prior daily journal without opening unrelated files manually.
 - **SC-006**: In keyboard-only acceptance checks, users can complete capture, browse,
-  edit, and reflection workflows; the same workflows remain readable in dark mode.
+  edit, and reflection workflows with visible focus, semantically named controls, and
+  announced save/error status; the same workflows remain readable in dark mode.
 - **SC-007**: When a backup destination is unavailable, all local unpushed commits
   remain available and the user can see the failure status and error.
 
@@ -265,18 +318,31 @@ and confirm pending commits remain available for a later retry.
 
 - Dates and timestamps are displayed in the user's local time; a daily journal is
   associated with the local calendar date when the entry is created.
-- A daily scheduled backup runs when Commitly is available. If Commitly is closed or
-  the destination is unavailable at the scheduled time, the run is deferred until
-  Commitly next runs or the destination becomes available; no always-on background
-  process is required.
+- A daily backup runs from a systemd user timer while the user's systemd manager is
+  active, even when the UI is closed. If the manager is stopped, its persistent timer
+  catches up at the next login; scheduling requires an active user manager and linger
+  is disabled by default. Remote or credential failures are reported and retried at
+  the next scheduled run; no resident app daemon is required.
 - A backup destination is not configured by default. Users select their destination
-  and confirm it is private before the first automatic push; remote backup is limited
-  to that configured destination.
+  and assert it is private before the first automatic push. Commitly cannot verify
+  remote privacy; remote backup is limited to that configured destination.
 - A blocker is unresolved until the user explicitly marks it resolved. Resolving it
   hides it from unresolved-blocker summaries but does not remove it from journal
   history.
 - Keyword search covers entry descriptions and optional text fields. The product
   does not require searching reflection text or archived project names in the MVP.
+- Prior context searches all dates for unresolved entry blockers and entries with
+  next steps, ordered newest first; the dashboard shows at most five of each. Project
+  activity uses the same ordering and limit. Reflection blocker text is descriptive
+  only, has no separate resolved state, and is not blocker status.
+- Search acceptance uses 1,000 seeded entries and checks complete expected matches
+  and source dates; the MVP has no response-time guarantee.
+- Project IDs remain stable through rename and archive. Historical entries show the
+  current project name and an archived label when applicable. Workspace location is
+  read-only in Settings.
+- Conflict recovery copies remain until the resolution saves successfully, then may
+  be deleted. Malformed or unsupported Markdown is left untouched; the user is told
+  to copy and repair it manually.
 - Archived projects remain available for viewing existing history but cannot be
   assigned to new entries.
 - The MVP is for one individual using a local workspace; collaboration, cloud

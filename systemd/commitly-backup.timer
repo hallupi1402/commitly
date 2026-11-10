@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Commitly journal backup
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+AccuracySec=1min
+Unit=commitly-backup.service
+
+[Install]
+WantedBy=timers.target

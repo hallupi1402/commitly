@@ -43,10 +43,10 @@ browser and does not require internet access for journal operations.
 
 **Project Type**: Local-first web application with a Python API and static frontend.
 
-**Performance Goals**: The specification defines no numeric latency or throughput
-target. Keep capture and date browsing local and synchronous from the user's
-perspective. Search scans the user's Markdown journal directly; do not add an index
-or database before measurements show a need.
+**Performance Goals**: Keep capture and date browsing local and synchronous from the
+user's perspective. Search correctness is validated against 1,000 seeded entries;
+the MVP makes no response-time promise. Search scans the user's Markdown journal
+directly; do not add an index or database before measurements show a need.
 
 **Constraints**: Bind the API and development server to loopback only. Do not enable
 wildcard CORS or expose the app on a LAN. Core journal operations make no network
@@ -81,8 +81,10 @@ scale are out of scope.
 - **Quality and Security**: Automated tests, actionable errors, keyboard access,
   dark mode, loopback binding, and private-by-confirmation backup are design gates.
 
-**Post-design gate — PASS**: `data-model.md`, API contracts, test layers, and
-`quickstart.md` preserve the same boundaries. No constitution exception is required.
+**Post-design consistency — PASS**: `data-model.md`, API contracts, test layers,
+and `quickstart.md` preserve the same boundaries. No constitution exception is
+required. The separate pre-implementation review gate below must still pass before
+coding starts.
 
 ## Pre-Implementation Review Gate
 

@@ -1,0 +1,9 @@
+[Unit]
+Description=Commitly local journal Git backup
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/commitly-backup
+NoNewPrivileges=true
+PrivateTmp=true

@@ -103,11 +103,13 @@
   resident process. Local commits survive remote, authentication, or network errors
   and can be pushed on a later run. No force push, reset, automatic remote merge, or
   empty commit is used.
-- **Scheduling assumption**: The timer runs while the user's systemd manager is
-  active even when the UI is closed. With default user-manager behavior and no
-  linger, a missed timer run is caught up when the user logs in again. Do not enable
-  linger by default. The service runs the installed backup entry point and reads
-  the same workspace configuration as the UI.
+- **Scheduling assumption**: The persistent timer runs while the user's systemd
+  manager is active even when the UI is closed. If the manager is stopped, a missed
+  run is caught up when the user logs in again. Scheduling requires an active user
+  manager; do not enable linger by default. Remote or credential failures retain
+  local commits, report a sanitized error, and retry on the next scheduled run. The
+  service runs the installed backup entry point and reads the same workspace
+  configuration as the UI.
 - **Credentials**: Reuse the user's configured Git credential helper; do not put
   tokens or passwords in systemd unit environment variables or Commitly settings.
   Report authentication failures without logging credentials.
@@ -146,5 +148,7 @@
   target is required.
 - Search scans dated Markdown journals directly. No index or database is added
   unless measured personal journal sizes show that file scanning is insufficient.
+  Acceptance uses 1,000 seeded entries and checks that every expected match and its
+  source date are returned; no response-time promise is set.
 - Missed daily backups are handled by the persistent user timer; the GUI does not
   need to remain open, but the user systemd manager must be active for a run.
